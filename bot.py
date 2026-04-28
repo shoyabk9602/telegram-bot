@@ -23,18 +23,35 @@ def join_button():
 # 🔹 message handler
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
+    text = update.message.text.lower()
 
-    if user_id in joined_users:
-        await update.message.reply_text("✅ Tum already join kar chuke ho")
-        return
+    # 🔥 TEST MODE (only for keyword)
+    if text == "shoyabtest":
+        link = await context.bot.create_chat_invite_link(
+            chat_id=CHANNEL_ID,
+            member_limit=1
+        )
 
-    if user_id in user_links:
         await update.message.reply_text(
-            f"❌ Tum already link le chuke ho\n\n👉 {user_links[user_id]}",
+            f"🧪 TEST MODE ACTIVE\n\n👉 {link.invite_link}",
             reply_markup=join_button()
         )
         return
 
+    # 👉 already joined
+    if user_id in joined_users:
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
+        return
+
+    # 👉 already got link
+    if user_id in user_links:
+        await update.message.reply_text(
+            "❌ Tum already invite link le chuke ho",
+            reply_markup=join_button()
+        )
+        return
+
+    # 👉 new user
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1
@@ -43,11 +60,11 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_links[user_id] = link.invite_link
 
     await update.message.reply_text(
-        f"🚀 Join karo:\n{link.invite_link}\n\n⚠️ Ek hi baar use hoga",
+        f"🚀 Join karo:\n{link.invite_link}",
         reply_markup=join_button()
     )
 
-# 🔹 join verify button
+# 🔹 verify join
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -57,7 +74,6 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if member.status in ["member", "administrator", "creator"]:
         joined_users.add(user_id)
 
-        # expire link
         if user_id in user_links:
             try:
                 await context.bot.revoke_chat_invite_link(
@@ -67,18 +83,12 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 pass
 
-        await query.edit_message_text("🎉 Welcome! Tum successfully join kar chuke ho 🚀")
-
-        # DM welcome
-        await context.bot.send_message(
-            chat_id=user_id,
-            text="🔥 Welcome to premium system!\nStay tuned 😎"
-        )
+        await query.edit_message_text("🎉 Joined Successfully 🚀")
 
     else:
-        await query.answer("❌ Pehle channel join karo", show_alert=True)
+        await query.answer("❌ Pehle join karo", show_alert=True)
 
-# 🔹 join detect auto
+# 🔹 track join
 async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.chat_member.new_chat_member.user
     user_id = user.id
@@ -93,5 +103,5 @@ app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 app.add_handler(ChatMemberHandler(track_join, ChatMemberHandler.CHAT_MEMBER))
 
-print("Advanced Bot Running 🚀")
+print("Bot Running 🚀")
 app.run_polling()
