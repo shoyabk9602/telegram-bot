@@ -13,10 +13,10 @@ from telegram.ext import (
 
 BOT_TOKEN = "8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A"
 CHANNEL_ID = "@ikminvite"
-ADMIN_ID = 7206670618  # 👉 apna telegram id daal
+ADMIN_ID = 7206670618
 
 # ================= DATABASE =================
-conn = sqlite3.connect("users.db")
+conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -37,17 +37,17 @@ def get_users():
     cursor.execute("SELECT user_id FROM users")
     return [row[0] for row in cursor.fetchall()]
 
+# ================= DATA =================
+user_links = {}
+joined_users = set()
+
 # ================= BUTTON =================
 def join_button():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
-# ================= DATA =================
-user_links = {}
-joined_users = set()
-
-# ================= COUNTDOWN =================
+# ================= COUNTDOWN (FIXED) =================
 async def countdown_timer(message, invite_link, seconds):
     for remaining in range(seconds, 0, -1):
         try:
@@ -59,21 +59,23 @@ async def countdown_timer(message, invite_link, seconds):
                 parse_mode="Markdown",
                 reply_markup=join_button()
             )
-            await asyncio.sleep(1)
         except:
-            await asyncio.sleep(1)
+            pass
+        await asyncio.sleep(1)
 
+    # 🔥 FINAL MESSAGE (FIXED - ALWAYS SHOW)
     try:
         await message.edit_text(
             "❌ *LINK EXPIRED*\n\n"
-            "📢 Naya link ke liye yahan message kare:\n"
+            "⛔ Ye invite link ab kaam nahi karega\n\n"
+            "📢 *Naya link lene ke liye yahan message kare:*\n"
             "👉 https://t.me/Shoyabk96",
             parse_mode="Markdown"
         )
-    except:
-        pass
+    except Exception as e:
+        print("Expire error:", e)
 
-# ================= INVITE SYSTEM =================
+# ================= INVITE =================
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     save_user(user_id)
@@ -178,13 +180,12 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Done\n✔️ {success}\n❌ {fail}")
 
-# ================= USER COUNT =================
+# ================= USERS =================
 async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    total = len(get_users())
-    await update.message.reply_text(f"👥 Total Users: {total}")
+    await update.message.reply_text(f"👥 Total Users: {len(get_users())}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -195,5 +196,5 @@ app.add_handler(CommandHandler("users", users))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 FULL SYSTEM RUNNING...")
+print("🔥 FINAL SYSTEM RUNNING...")
 app.run_polling()
