@@ -11,7 +11,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-BOT_TOKEN = "PASTE_YOUR_TOKEN"
+BOT_TOKEN = "8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A"
 ADMIN_ID = 7206670618
 CHANNEL_ID = "@ikminvite"
 
