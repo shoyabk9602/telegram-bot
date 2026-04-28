@@ -39,20 +39,31 @@ def join_button():
     ])
 
 # ================= COUNTDOWN =================
-async def countdown(message, link):
+async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
-            await message.edit_text(
-                f"🚀 Link:\n{link}\n\n⏳ {i} sec",
+            await msg.edit_text(
+                f"🔥 *Exclusive Invite Link*\n\n"
+                f"👉 {link}\n\n"
+                f"⏳ Expire in: *{i} sec*\n\n"
+                f"⚠️ Join fast and press button",
+                parse_mode="Markdown",
                 reply_markup=join_button()
             )
         except:
             pass
         await asyncio.sleep(1)
 
-    await message.edit_text(
-        "❌ LINK EXPIRED\n👉 https://t.me/Shoyabk96"
-    )
+    # 🔥 FINAL EXPIRE MESSAGE
+    try:
+        await msg.edit_text(
+            "❌ *LINK EXPIRED*\n\n"
+            "📩 Naya link lene ke liye yahan message karo:\n"
+            "👉 https://t.me/Shoyabk96",
+            parse_mode="Markdown"
+        )
+    except:
+        pass
 
 # ================= INVITE =================
 async def send_link(update, context):
@@ -63,11 +74,11 @@ async def send_link(update, context):
     save_user(user_id)
 
     if user_id in joined_users:
-        await update.message.reply_text("✅ Already joined")
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
         return
 
     if user_id in user_links:
-        await update.message.reply_text("❌ Already got link")
+        await update.message.reply_text("❌ Tum already link le chuke ho")
         return
 
     link = await context.bot.create_chat_invite_link(
@@ -78,22 +89,19 @@ async def send_link(update, context):
 
     user_links[user_id] = link.invite_link
 
-    # 🔔 ADMIN NOTIFICATION (username FIXED)
+    # 🔔 ADMIN NOTIFICATION
     await context.bot.send_message(
         ADMIN_ID,
-        f"📢 New User Took Link\n👤 {username}\n🆔 {user_id}"
+        f"📢 User Took Link\n👤 {username}\n🆔 {user_id}"
     )
 
     msg = await update.message.reply_text(
-        f"🚀 Link:\n{link.invite_link}",
+        f"🚀 *Your Private Invite Link*\n\n👉 {link.invite_link}",
+        parse_mode="Markdown",
         reply_markup=join_button()
     )
 
     asyncio.create_task(countdown(msg, link.invite_link))
-
-# ================= START =================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await send_link(update, context)
 
 # ================= VERIFY =================
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -116,7 +124,11 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text("🎉 Joined Successfully")
     else:
-        await query.answer("❌ Join first", show_alert=True)
+        await query.answer("❌ Join channel first", show_alert=True)
+
+# ================= START =================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_link(update, context)
 
 # ================= BROADCAST =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,23 +148,70 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"📊 Sent: {success}\n❌ Failed: {fail}")
 
+# ================= PHOTO =================
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❌ Photo pe reply karo")
+        return
+
+    file_id = update.message.reply_to_message.photo[-1].file_id
+    caption = " ".join(context.args)
+
+    for u in get_users():
+        try:
+            await context.bot.send_photo(u, file_id, caption=caption)
+            await asyncio.sleep(0.05)
+        except:
+            pass
+
+    await update.message.reply_text("📸 Photo sent")
+
+# ================= BUTTON BROADCAST =================
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    if len(context.args) < 2:
+        await update.message.reply_text("Use: /button msg link")
+        return
+
+    msg = context.args[0]
+    link = context.args[1]
+
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("👉 Click Here", url=link)]
+    ])
+
+    for u in get_users():
+        try:
+            await context.bot.send_message(u, msg, reply_markup=kb)
+            await asyncio.sleep(0.05)
+        except:
+            pass
+
+    await update.message.reply_text("🔘 Button sent")
+
 # ================= USERS =================
 async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    await update.message.reply_text(f"👥 Total Users: {len(get_users())}")
+    await update.message.reply_text(f"👥 Users: {len(get_users())}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("broadcast", broadcast))
+app.add_handler(CommandHandler("photo", photo))
+app.add_handler(CommandHandler("button", button))
 app.add_handler(CommandHandler("users", users))
 
-# ⚠️ IMPORTANT (commands ke baad)
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 CLEAN BOT RUNNING")
+print("🔥 FINAL PERFECT BOT RUNNING")
 app.run_polling()
