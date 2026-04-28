@@ -2,7 +2,7 @@ import os
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
 
-BOT_TOKEN = os.getenv("8671275232:AAFTsTt6ddtLX-0qKlM8knoFVLbRN6GkIW0")
+BOT_TOKEN = os.getenv("8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A")
 CHANNEL_ID = "@ikminvite"
 
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
