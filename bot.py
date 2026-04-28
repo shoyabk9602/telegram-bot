@@ -1,7 +1,8 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
+    CallbackQueryHandler,
     filters,
     ContextTypes,
     ChatMemberHandler
@@ -13,52 +14,71 @@ CHANNEL_ID = "@ikminvite"
 user_links = {}
 joined_users = set()
 
-# 🔹 stylish messages
-ALREADY_MSG = """❌ *Access Denied*
-
-🚫 Tum already invite link le chuke ho  
-🔒 Dubara link generate nahi hoga
-
-👉 Agar join nahi kiya hai, to apna pehla link use karo"""
-
-JOINED_MSG = """✅ *Successfully Joined*
-
-🎉 Tum channel join kar chuke ho  
-💡 Ab dubara link ki zarurat nahi"""
+# 🔹 button
+def join_button():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
+    ])
 
 # 🔹 message handler
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # 👉 already joined
     if user_id in joined_users:
-        await update.message.reply_text(JOINED_MSG, parse_mode="Markdown")
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
         return
 
-    # 👉 already got link
     if user_id in user_links:
-        await update.message.reply_text(ALREADY_MSG, parse_mode="Markdown")
+        await update.message.reply_text(
+            f"❌ Tum already link le chuke ho\n\n👉 {user_links[user_id]}",
+            reply_markup=join_button()
+        )
         return
 
-    try:
-        link = await context.bot.create_chat_invite_link(
-            chat_id=CHANNEL_ID,
-            member_limit=1
+    link = await context.bot.create_chat_invite_link(
+        chat_id=CHANNEL_ID,
+        member_limit=1
+    )
+
+    user_links[user_id] = link.invite_link
+
+    await update.message.reply_text(
+        f"🚀 Join karo:\n{link.invite_link}\n\n⚠️ Ek hi baar use hoga",
+        reply_markup=join_button()
+    )
+
+# 🔹 join verify button
+async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+
+    if member.status in ["member", "administrator", "creator"]:
+        joined_users.add(user_id)
+
+        # expire link
+        if user_id in user_links:
+            try:
+                await context.bot.revoke_chat_invite_link(
+                    chat_id=CHANNEL_ID,
+                    invite_link=user_links[user_id]
+                )
+            except:
+                pass
+
+        await query.edit_message_text("🎉 Welcome! Tum successfully join kar chuke ho 🚀")
+
+        # DM welcome
+        await context.bot.send_message(
+            chat_id=user_id,
+            text="🔥 Welcome to premium system!\nStay tuned 😎"
         )
 
-        invite_link = link.invite_link
-        user_links[user_id] = invite_link
+    else:
+        await query.answer("❌ Pehle channel join karo", show_alert=True)
 
-        await update.message.reply_text(
-            f"🚀 *Exclusive Invite Link*\n\n👉 {invite_link}\n\n⚠️ *Note:* Ye link sirf ek baar use hoga",
-            parse_mode="Markdown"
-        )
-
-    except Exception as e:
-        print("Error:", e)
-
-
-# 🔹 join detect + expire link
+# 🔹 join detect auto
 async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.chat_member.new_chat_member.user
     user_id = user.id
@@ -66,20 +86,12 @@ async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.chat_member.new_chat_member.status in ["member", "administrator", "creator"]:
         joined_users.add(user_id)
 
-        if user_id in user_links:
-            try:
-                await context.bot.revoke_chat_invite_link(
-                    chat_id=CHANNEL_ID,
-                    invite_link=user_links[user_id]
-                )
-            except Exception as e:
-                print("Revoke error:", e)
-
-
+# app
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
+app.add_handler(CallbackQueryHandler(check_join))
 app.add_handler(ChatMemberHandler(track_join, ChatMemberHandler.CHAT_MEMBER))
 
-print("Bot chal raha hai...")
+print("Advanced Bot Running 🚀")
 app.run_polling()
