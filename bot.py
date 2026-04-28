@@ -11,7 +11,7 @@ from telegram.ext import (
     ContextTypes
 )
 
-BOT_TOKEN = "8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A"
+BOT_TOKEN = "PASTE_YOUR_TOKEN"
 ADMIN_ID = 7206670618
 CHANNEL_ID = "@ikminvite"
 
@@ -29,7 +29,7 @@ def get_users():
     cursor.execute("SELECT user_id FROM users")
     return [x[0] for x in cursor.fetchall()]
 
-# ================= INVITE DATA =================
+# ================= DATA =================
 user_links = {}
 joined_users = set()
 
@@ -38,20 +38,36 @@ def join_button():
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
+# ================= COUNTDOWN =================
+async def countdown(message, link):
+    for i in range(60, 0, -1):
+        try:
+            await message.edit_text(
+                f"🚀 Link:\n{link}\n\n⏳ {i} sec",
+                reply_markup=join_button()
+            )
+        except:
+            pass
+        await asyncio.sleep(1)
+
+    await message.edit_text(
+        "❌ LINK EXPIRED\n👉 https://t.me/Shoyabk96"
+    )
+
 # ================= INVITE =================
-async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def send_link(update, context):
     user = update.effective_user
     user_id = user.id
-    name = user.first_name
+    username = f"@{user.username}" if user.username else "No username"
 
     save_user(user_id)
 
     if user_id in joined_users:
-        await update.message.reply_text("✅ Tum already join kar chuke ho")
+        await update.message.reply_text("✅ Already joined")
         return
 
     if user_id in user_links:
-        await update.message.reply_text("❌ Tum already link le chuke ho")
+        await update.message.reply_text("❌ Already got link")
         return
 
     link = await context.bot.create_chat_invite_link(
@@ -60,22 +76,24 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
-    invite_link = link.invite_link
-    user_links[user_id] = invite_link
+    user_links[user_id] = link.invite_link
 
-    # 🔔 ADMIN NOTIFICATION
-    try:
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"📢 User Took Link\n👤 {name}\n🆔 {user_id}"
-        )
-    except:
-        pass
+    # 🔔 ADMIN NOTIFICATION (username FIXED)
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"📢 New User Took Link\n👤 {username}\n🆔 {user_id}"
+    )
 
-    await update.message.reply_text(
-        f"🚀 Link:\n{invite_link}",
+    msg = await update.message.reply_text(
+        f"🚀 Link:\n{link.invite_link}",
         reply_markup=join_button()
     )
+
+    asyncio.create_task(countdown(msg, link.invite_link))
+
+# ================= START =================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await send_link(update, context)
 
 # ================= VERIFY =================
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -98,26 +116,17 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await query.edit_message_text("🎉 Joined Successfully")
     else:
-        await query.answer("❌ Pehle join karo", show_alert=True)
+        await query.answer("❌ Join first", show_alert=True)
 
-# ================= START =================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await auto_reply(update, context)
-
-async def auto_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    save_user(update.effective_user.id)
-
-# ================= TEXT BROADCAST =================
+# ================= BROADCAST =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
     msg = " ".join(context.args)
-    users = get_users()
-
     success, fail = 0, 0
 
-    for u in users:
+    for u in get_users():
         try:
             await context.bot.send_message(u, msg)
             success += 1
@@ -127,94 +136,23 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"📊 Sent: {success}\n❌ Failed: {fail}")
 
-# ================= PHOTO =================
-async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    if not update.message.reply_to_message:
-        await update.message.reply_text("❌ Photo pe reply karo")
-        return
-
-    file_id = update.message.reply_to_message.photo[-1].file_id
-    caption = " ".join(context.args)
-
-    success, fail = 0, 0
-
-    for u in get_users():
-        try:
-            await context.bot.send_photo(u, file_id, caption=caption)
-            success += 1
-            await asyncio.sleep(0.05)
-        except:
-            fail += 1
-
-    await update.message.reply_text(f"📸 Sent: {success}\n❌ Failed: {fail}")
-
-# ================= BUTTON =================
-async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    if len(context.args) < 2:
-        await update.message.reply_text("Use: /button msg link")
-        return
-
-    msg = context.args[0]
-    link = context.args[1]
-
-    kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👉 Open", url=link)]
-    ])
-
-    for u in get_users():
-        try:
-            await context.bot.send_message(u, msg, reply_markup=kb)
-            await asyncio.sleep(0.05)
-        except:
-            pass
-
-    await update.message.reply_text("✅ Button sent")
-
-# ================= SCHEDULE =================
-async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    delay = int(context.args[0])
-    msg = " ".join(context.args[1:])
-
-    await update.message.reply_text(f"⏳ {delay}s me jayega")
-
-    await asyncio.sleep(delay)
-
-    for u in get_users():
-        try:
-            await context.bot.send_message(u, msg)
-            await asyncio.sleep(0.05)
-        except:
-            pass
-
-    await update.message.reply_text("✅ Done")
-
 # ================= USERS =================
 async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    await update.message.reply_text(f"👥 Users: {len(get_users())}")
+    await update.message.reply_text(f"👥 Total Users: {len(get_users())}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("photo", photo))
-app.add_handler(CommandHandler("button", button))
-app.add_handler(CommandHandler("schedule", schedule))
 app.add_handler(CommandHandler("users", users))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
+
+# ⚠️ IMPORTANT (commands ke baad)
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 FINAL ALL-IN-ONE BOT RUNNING")
+print("🔥 CLEAN BOT RUNNING")
 app.run_polling()
