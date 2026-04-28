@@ -20,23 +20,25 @@ def join_button():
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
-# 🔥 countdown function
+# 🔥 1-sec countdown (optimized)
 async def countdown_timer(message, invite_link, seconds):
-    for remaining in range(seconds, 0, -5):
+    for remaining in range(seconds, 0, -1):
         try:
             await message.edit_text(
                 f"🚀 *Exclusive Invite Link*\n\n👉 {invite_link}\n\n⏳ Expire in: *{remaining} sec*\n\n👉 Join karke button dabao",
                 parse_mode="Markdown",
                 reply_markup=join_button()
             )
-            await asyncio.sleep(5)
-        except:
-            break
+            await asyncio.sleep(1)
+        except Exception as e:
+            # ⚠️ rate limit ya edit error ignore
+            await asyncio.sleep(1)
+            continue
 
     # final expire message
     try:
         await message.edit_text(
-            "❌ *Link Expired*\n\n🔒 Ab ye link kaam nahi karega\n👉 Naya link nahi milega",
+            "❌ *Link Expired*\n\n🔒 Ab ye link kaam nahi karega",
             parse_mode="Markdown"
         )
     except:
@@ -47,7 +49,6 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.lower()
 
-    # TEST MODE
     if text == "shoyabtest":
         link = await context.bot.create_chat_invite_link(
             chat_id=CHANNEL_ID,
@@ -84,7 +85,6 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=join_button()
     )
 
-    # 🔥 start countdown
     asyncio.create_task(countdown_timer(msg, link.invite_link, 60))
 
 
@@ -116,5 +116,5 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 Countdown Bot Running...")
+print("🔥 1-Second Countdown Bot Running...")
 app.run_polling()
