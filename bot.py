@@ -47,7 +47,7 @@ def join_button():
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
-# ================= COUNTDOWN (FIXED) =================
+# ================= COUNTDOWN =================
 async def countdown_timer(message, invite_link, seconds):
     for remaining in range(seconds, 0, -1):
         try:
@@ -63,7 +63,7 @@ async def countdown_timer(message, invite_link, seconds):
             pass
         await asyncio.sleep(1)
 
-    # 🔥 FINAL MESSAGE (FIXED - ALWAYS SHOW)
+    # 🔥 FINAL MESSAGE FIXED
     try:
         await message.edit_text(
             "❌ *LINK EXPIRED*\n\n"
@@ -72,8 +72,8 @@ async def countdown_timer(message, invite_link, seconds):
             "👉 https://t.me/Shoyabk96",
             parse_mode="Markdown"
         )
-    except Exception as e:
-        print("Expire error:", e)
+    except:
+        pass
 
 # ================= INVITE =================
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -153,46 +153,50 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ Pehle join karo", show_alert=True)
 
-# ================= BROADCAST =================
+# ================= TEXT BROADCAST =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        return
-
-    if not context.args:
-        await update.message.reply_text("❌ Message likho")
         return
 
     msg = " ".join(context.args)
     users = get_users()
 
-    success = 0
-    fail = 0
-
-    await update.message.reply_text(f"🚀 Sending to {len(users)} users...")
-
     for user in users:
         try:
             await context.bot.send_message(chat_id=user, text=msg)
-            success += 1
             await asyncio.sleep(0.05)
         except:
-            fail += 1
+            pass
 
-    await update.message.reply_text(f"✅ Done\n✔️ {success}\n❌ {fail}")
+    await update.message.reply_text("✅ Broadcast Done")
 
-# ================= USERS =================
-async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= PHOTO BROADCAST =================
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    await update.message.reply_text(f"👥 Total Users: {len(get_users())}")
+    if not update.message.reply_to_message or not update.message.reply_to_message.photo:
+        await update.message.reply_text("❌ Photo pe reply karo")
+        return
+
+    photo = update.message.reply_to_message.photo[-1].file_id
+    caption = " ".join(context.args)
+
+    for user in get_users():
+        try:
+            await context.bot.send_photo(chat_id=user, photo=photo, caption=caption)
+            await asyncio.sleep(0.05)
+        except:
+            pass
+
+    await update.message.reply_text("📸 Photo Broadcast Done")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("users", users))
+app.add_handler(CommandHandler("photo", photo))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 
