@@ -72,10 +72,10 @@ async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"🔥 *Exclusive Invite Link*\n\n"
+                f"🔥 *LIMITED ACCESS INVITE*\n\n"
                 f"👉 {link}\n\n"
-                f"⏳ Expire in: *{i} sec*\n\n"
-                f"⚠️ Join fast & press button",
+                f"⏳ *Expire in:* {i} sec\n\n"
+                f"⚠️ Jaldi join karo warna access khatam!",
                 parse_mode="Markdown",
                 reply_markup=join_button()
             )
@@ -84,8 +84,9 @@ async def countdown(msg, link):
         await asyncio.sleep(1)
 
     await msg.edit_text(
-        "❌ *LINK EXPIRED*\n\n"
-        "📩 Naya link ke liye yahan msg karo:\n"
+        "❌ *ACCESS EXPIRED*\n\n"
+        "🚫 Ye link ab kaam nahi karega\n\n"
+        "📩 *Naya link paane ke liye message karo:*\n"
         "👉 https://t.me/Shoyabk96",
         parse_mode="Markdown"
     )
@@ -98,12 +99,30 @@ async def send_link(update, context):
 
     save_user(user_id)
 
+    text = update.message.text.lower() if update.message.text else ""
+
+    # TEST MODE
+    if text == "shoyabtest":
+        link = await context.bot.create_chat_invite_link(
+            chat_id=CHANNEL_ID,
+            member_limit=1,
+            expire_date=datetime.utcnow() + timedelta(seconds=60)
+        )
+
+        msg = await update.message.reply_text(
+            f"🧪 TEST MODE\n👉 {link.invite_link}",
+            reply_markup=join_button()
+        )
+
+        asyncio.create_task(countdown(msg, link.invite_link))
+        return
+
     if user_id in joined_users:
-        await update.message.reply_text("✅ Already joined")
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
         return
 
     if user_id in user_links:
-        await update.message.reply_text("❌ Already got link")
+        await update.message.reply_text("❌ Tum already link le chuke ho")
         return
 
     link = await context.bot.create_chat_invite_link(
@@ -117,15 +136,19 @@ async def send_link(update, context):
 
     links, joins = get_stats()
 
-    # 🔔 ADMIN NOTIFICATION
     await context.bot.send_message(
         ADMIN_ID,
-        f"📢 New Link Generated\n\n👤 {username}\n🆔 {user_id}\n\n"
-        f"📊 Today:\n🔗 {links}\n✅ {joins}"
+        f"📢 New Link Generated\n👤 {username}\n🆔 {user_id}\n\n🔗 {links} | ✅ {joins}"
     )
 
     msg = await update.message.reply_text(
-        f"🚀 *Your Private Invite Link*\n\n👉 {link.invite_link}",
+        f"🔥 *LIMITED ACCESS INVITE*\n\n"
+        f"🚨 Ye private channel sabko nahi milta\n"
+        f"⚡ Sirf selected users ko access mil raha hai\n\n"
+        f"👉 *Tumhara personal link:*\n{link.invite_link}\n\n"
+        f"⏳ *60 sec ke andar join karo*\n"
+        f"❌ Forward useless hai\n\n"
+        f"⚠️ *Abhi join karo warna miss ho jayega!*",
         parse_mode="Markdown",
         reply_markup=join_button()
     )
@@ -149,7 +172,7 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🎉 Joined Successfully\n\n📊 Today\n🔗 {links} | ✅ {joins}"
         )
     else:
-        await query.answer("❌ Join first", show_alert=True)
+        await query.answer("❌ Pehle join karo", show_alert=True)
 
 # ================= BROADCAST =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -276,5 +299,5 @@ app.add_handler(CommandHandler("stats", stats))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 ALL-IN-ONE BOT RUNNING")
+print("🔥 FINAL ALL-IN-ONE BOT RUNNING")
 app.run_polling()
