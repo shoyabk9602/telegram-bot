@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -28,11 +29,12 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "shoyabtest":
         link = await context.bot.create_chat_invite_link(
             chat_id=CHANNEL_ID,
-            member_limit=1
+            member_limit=1,
+            expire_date=datetime.utcnow() + timedelta(seconds=60)
         )
 
         await update.message.reply_text(
-            f"🧪 *TEST MODE ACTIVE*\n\n👉 {link.invite_link}",
+            f"🧪 *TEST MODE ACTIVE*\n\n👉 {link.invite_link}\n\n⏳ Valid: 60 sec",
             parse_mode="Markdown",
             reply_markup=join_button()
         )
@@ -55,17 +57,18 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 🆕 new user → generate link
+    # 🆕 new user → generate short-lived link
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
-        member_limit=1
+        member_limit=1,
+        expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
     invite_link = link.invite_link
     user_links[user_id] = invite_link
 
     await update.message.reply_text(
-        f"🚀 *Exclusive Invite Link*\n\n👉 {invite_link}\n\n⚠️ *Note:* Join karne ke baad niche button zaroor dabao",
+        f"🚀 *Exclusive Invite Link*\n\n👉 {invite_link}\n\n⚠️ *Note:* Link sirf 60 sec valid hai\n👉 Join karke turant button dabao",
         parse_mode="Markdown",
         reply_markup=join_button()
     )
@@ -77,11 +80,10 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
 
-    # ✅ user joined
     if member.status in ["member", "administrator", "creator"]:
         joined_users.add(user_id)
 
-        # 🔥 expire link
+        # 🔥 instant revoke
         if user_id in user_links:
             try:
                 await context.bot.revoke_chat_invite_link(
@@ -100,17 +102,17 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # optional DM
         await context.bot.send_message(
             chat_id=user_id,
-            text="🔥 Welcome! Stay tuned for updates 😎"
+            text="🔥 Welcome! Stay tuned 😎"
         )
 
     else:
         await query.answer("❌ Pehle channel join karo", show_alert=True)
 
-# 🔹 start app
+# 🔹 start bot
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 Advanced Bot Running...")
+print("🔥 Ultra Secure Bot Running...")
 app.run_polling()
