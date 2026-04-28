@@ -5,6 +5,7 @@ from telegram.ext import (
     ApplicationBuilder,
     MessageHandler,
     CallbackQueryHandler,
+    CommandHandler,
     filters,
     ContextTypes
 )
@@ -21,7 +22,7 @@ def join_button():
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
-# 🔥 1-sec countdown
+# 🔥 countdown
 async def countdown_timer(message, invite_link, seconds):
     for remaining in range(seconds, 0, -1):
         try:
@@ -44,18 +45,17 @@ async def countdown_timer(message, invite_link, seconds):
             "⛔ Ye invite link ab kaam nahi karega\n\n"
             "📢 *Next Step:*\n"
             "👉 Naya link lene ke liye yahan message kare\n"
-            "🔗 https://t.me/Shoyabk96\n\n"
-            "⚡ Limited access!",
+            "🔗 https://t.me/Shoyabk96",
             parse_mode="Markdown"
         )
     except:
         pass
 
 
-# 🔹 main handler
+# 🔹 main logic
 async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text.lower()
+    text = update.message.text.lower() if update.message.text else ""
 
     # 🧪 TEST MODE
     if text == "shoyabtest":
@@ -111,7 +111,18 @@ async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(countdown_timer(msg, invite_link, 60))
 
 
-# 🔹 join verify + revoke
+# 🔹 START COMMAND (AUTO LINK TRIGGER)
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "👋 *Welcome!*\n\n🔥 Yahan se apna exclusive invite link pao",
+        parse_mode="Markdown"
+    )
+
+    # 🔥 direct link bhej do
+    await auto_reply(update, context)
+
+
+# 🔹 verify join
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -143,11 +154,12 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer("❌ Pehle channel join karo", show_alert=True)
 
 
-# 🚀 run bot
+# 🚀 app start
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+app.add_handler(CommandHandler("start", start))  # 🔥 important
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
 app.add_handler(CallbackQueryHandler(check_join))
 
-print("🔥 Ultimate Bot Running...")
+print("🔥 Final Bot Running...")
 app.run_polling()
