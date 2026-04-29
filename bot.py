@@ -69,8 +69,9 @@ def join_btn():
 
 # ================= INVITE =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    username = update.effective_user.username
+    user = update.effective_user
+    user_id = user.id
+    username = f"@{user.username}" if user.username else "NoUsername"
 
     save_user(user_id)
 
@@ -84,56 +85,77 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
-    user_links[user_id] = link.invite_link
+    invite = link.invite_link
+    user_links[user_id] = invite
     add_link()
 
     links, joins = get_stats()
 
-    # admin notification
+    # 🔥 ADMIN NOTIFICATION
     await context.bot.send_message(
         ADMIN_ID,
-        f"📢 NEW LINK\nUser: @{username}\nID: {user_id}\n\n{link.invite_link}\n\nLinks:{links} Joins:{joins}"
+        f"📢 NEW LINK\n👤 {username}\n🆔 {user_id}\n\n🔗 {invite}\n📊 Links:{links} Joins:{joins}"
     )
 
+    # 🔥 HIGH CONVERT MESSAGE
     msg = await update.message.reply_text(
-        f"🔥 LIMITED ACCESS\n\n👉 {link.invite_link}\n⏳ 60 sec only",
+        f"🔥 *LIMITED VIP ACCESS*\n\n"
+        f"🚨 Ye private channel sabko nahi milta\n"
+        f"⚡ Sirf selected users ko entry mil rahi hai\n\n"
+        f"👉 *Tumhara personal invite link:*\n{invite}\n\n"
+        f"⏳ *60 sec me expire ho jayega*\n"
+        f"❌ Forward karne se kaam nahi karega\n\n"
+        f"⚠️ *Abhi join karo warna access chala jayega!*",
+        parse_mode="Markdown",
         reply_markup=join_btn()
     )
 
-    asyncio.create_task(countdown(msg, link.invite_link))
+    asyncio.create_task(countdown(msg, invite))
 
 # ================= COUNTDOWN =================
 async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"🔥 LINK\n\n{link}\n⏳ {i}s",
+                f"🔥 *VIP ACCESS*\n\n👉 {link}\n\n⏳ {i} sec\n⚠️ Jaldi join karo!",
+                parse_mode="Markdown",
                 reply_markup=join_btn()
             )
         except:
             pass
         await asyncio.sleep(1)
 
-    await msg.edit_text("❌ LINK EXPIRED\n👉 @Shoyabk96")
+    await msg.edit_text(
+        "❌ *LINK EXPIRED*\n\n📩 Naya link lene ke liye 👉 @Shoyabk96",
+        parse_mode="Markdown"
+    )
 
-# ================= JOIN BUTTON =================
+# ================= BUTTON FIX =================
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    await query.answer()
+
     user_id = query.from_user.id
 
-    member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+    try:
+        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
 
-    if member.status in ["member", "administrator", "creator"]:
-        if user_id not in joined_users:
-            joined_users.add(user_id)
-            add_join()
-        await query.edit_message_text("🎉 Joined Successfully")
-    else:
-        await query.answer("❌ Pehle join karo", show_alert=True)
+        if member.status in ["member", "administrator", "creator"]:
+            if user_id not in joined_users:
+                joined_users.add(user_id)
+                add_join()
+
+            await query.edit_message_text("🎉 Joined Successfully ✅")
+        else:
+            await query.answer("❌ Pehle join karo", show_alert=True)
+
+    except Exception as e:
+        await query.answer("❌ Error", show_alert=True)
 
 # ================= AUTO JOIN =================
 async def auto_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.chat_member.chat
+
     if chat.username != CHANNEL_ID.replace("@", ""):
         return
 
@@ -145,20 +167,26 @@ async def auto_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
             joined_users.add(user_id)
             add_join()
 
-# ================= BROADCAST =================
+# ================= BROADCAST (FIXED REPORT) =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
     msg = " ".join(context.args).replace("\\n", "\n")
 
+    success, fail = 0, 0
+
     for u in get_users():
         try:
             await context.bot.send_message(u, msg)
+            success += 1
+            await asyncio.sleep(0.03)
         except:
-            pass
+            fail += 1
 
-    await update.message.reply_text("✅ Broadcast done")
+    await update.message.reply_text(
+        f"📊 REPORT\n\n✅ Sent: {success}\n❌ Failed: {fail}"
+    )
 
 # ================= PHOTO =================
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -168,10 +196,16 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.reply_to_message
     caption = " ".join(context.args).replace("\\n", "\n")
 
-    for u in get_users():
-        await context.bot.send_photo(u, msg.photo[-1].file_id, caption=caption)
+    success, fail = 0, 0
 
-    await update.message.reply_text("📸 Done")
+    for u in get_users():
+        try:
+            await context.bot.send_photo(u, msg.photo[-1].file_id, caption=caption)
+            success += 1
+        except:
+            fail += 1
+
+    await update.message.reply_text(f"📸 Sent:{success} ❌:{fail}")
 
 # ================= VIDEO =================
 async def video(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -181,10 +215,16 @@ async def video(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.reply_to_message
     caption = " ".join(context.args).replace("\\n", "\n")
 
-    for u in get_users():
-        await context.bot.send_video(u, msg.video.file_id, caption=caption)
+    success, fail = 0, 0
 
-    await update.message.reply_text("🎬 Done")
+    for u in get_users():
+        try:
+            await context.bot.send_video(u, msg.video.file_id, caption=caption)
+            success += 1
+        except:
+            fail += 1
+
+    await update.message.reply_text(f"🎬 Sent:{success} ❌:{fail}")
 
 # ================= AUDIO =================
 async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -194,22 +234,24 @@ async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message.reply_to_message
     caption = " ".join(context.args).replace("\\n", "\n")
 
+    success, fail = 0, 0
+
     for u in get_users():
-        if msg.audio:
-            await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
-        elif msg.voice:
-            await context.bot.send_voice(u, msg.voice.file_id)
+        try:
+            if msg.audio:
+                await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+            elif msg.voice:
+                await context.bot.send_voice(u, msg.voice.file_id)
+            success += 1
+        except:
+            fail += 1
 
-    await update.message.reply_text("🎧 Done")
-
-# ================= USERS =================
-async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"👥 Users: {len(get_users())}")
+    await update.message.reply_text(f"🎧 Sent:{success} ❌:{fail}")
 
 # ================= STATS =================
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     l, j = get_stats()
-    await update.message.reply_text(f"📊 Links: {l}\nJoins: {j}")
+    await update.message.reply_text(f"📊 Links:{l}\nJoins:{j}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -219,12 +261,11 @@ app.add_handler(CommandHandler("broadcast", broadcast))
 app.add_handler(CommandHandler("photo", photo))
 app.add_handler(CommandHandler("video", video))
 app.add_handler(CommandHandler("audio", audio))
-app.add_handler(CommandHandler("users", users))
 app.add_handler(CommandHandler("stats", stats))
 
 app.add_handler(CallbackQueryHandler(join_check))
 app.add_handler(ChatMemberHandler(auto_join, ChatMemberHandler.CHAT_MEMBER))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
 
-print("🔥 BOT RUNNING PERFECTLY")
+print("🔥 FINAL FIXED BOT RUNNING")
 app.run_polling()
