@@ -23,7 +23,6 @@ cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, g
 cursor.execute("CREATE TABLE IF NOT EXISTS msgs (user_id INTEGER, msg_id INTEGER)")
 conn.commit()
 
-# ================= DB FUNCTIONS =================
 def save_user(uid):
     cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
     conn.commit()
@@ -38,8 +37,7 @@ def set_link(uid):
 
 def has_link(uid):
     cursor.execute("SELECT got_link FROM users WHERE user_id=?", (uid,))
-    row = cursor.fetchone()
-    return row and row[0] == 1
+    return cursor.fetchone()[0] == 1
 
 def set_join(uid):
     cursor.execute("UPDATE users SET joined=1 WHERE user_id=?", (uid,))
@@ -47,8 +45,7 @@ def set_join(uid):
 
 def has_join(uid):
     cursor.execute("SELECT joined FROM users WHERE user_id=?", (uid,))
-    row = cursor.fetchone()
-    return row and row[0] == 1
+    return cursor.fetchone()[0] == 1
 
 def save_msg(uid, mid):
     cursor.execute("INSERT INTO msgs VALUES (?,?)", (uid, mid))
@@ -75,7 +72,6 @@ def panel():
 
 user_mode = {}
 
-# ================= JOIN BUTTON =================
 def join_btn():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ I Joined", callback_data="join_check")]
@@ -93,12 +89,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
         return
 
+    # 🔥 FIX: already joined → NO LINK AGAIN
     if has_join(uid):
-        await update.message.reply_text("✅ Already joined")
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
         return
 
     if has_link(uid):
-        await update.message.reply_text("❌ Already got link")
+        await update.message.reply_text("❌ Tum already link le chuke ho\nJoin karo pehle")
         return
 
     link = await context.bot.create_chat_invite_link(
@@ -121,6 +118,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     asyncio.create_task(countdown(msg, link.invite_link))
 
+# ================= CUSTOM USER MSG =================
+async def user_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id == ADMIN_ID:
+        return
+
+    await update.message.reply_text(
+        "❗ Agar koi problem ho to yahan msg karo 👇\n👉 @Shoyabk96"
+    )
+
 # ================= COUNTDOWN =================
 async def countdown(msg, link):
     for i in range(60, 0, -1):
@@ -132,19 +138,20 @@ async def countdown(msg, link):
 
     await msg.edit_text("❌ Link expired\n👉 @Shoyabk96")
 
-# ================= JOIN CHECK =================
+# ================= JOIN FIX =================
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     uid = query.from_user.id
+
     member = await context.bot.get_chat_member(CHANNEL_ID, uid)
 
     if member.status in ["member", "administrator", "creator"]:
         set_join(uid)
         await query.edit_message_text("🎉 Joined Successfully")
     else:
-        await query.answer("❌ Join first", show_alert=True)
+        await query.answer("❌ Pehle join karo", show_alert=True)
 
 # ================= PANEL CLICK =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -155,14 +162,13 @@ async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if uid != ADMIN_ID:
         return
 
-    mode = query.data
-    user_mode[uid] = mode
+    user_mode[uid] = query.data
 
-    if mode == "users":
+    if query.data == "users":
         await query.message.reply_text(f"👥 {len(get_users())} users")
         return
 
-    await query.message.reply_text(f"👉 {mode.upper()} mode ON")
+    await query.message.reply_text(f"👉 {query.data.upper()} mode ON")
 
 # ================= HANDLE ADMIN =================
 async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -175,26 +181,9 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     caption = update.message.caption or update.message.text or ""
-    caption = caption.replace("\\n", "\n")
 
     success, fail = 0, 0
 
-    # ================= DELETE =================
-    if mode == "delete":
-        for u, mid in get_msgs():
-            try:
-                await context.bot.delete_message(u, mid)
-                success += 1
-            except:
-                fail += 1
-
-        clear_msgs()
-
-        await update.message.reply_text(f"🧹 Deleted\n✅ {success}\n❌ {fail}", reply_markup=panel())
-        user_mode[uid] = None
-        return
-
-    # ================= SEND =================
     for u in get_users():
         try:
             if mode == "broadcast":
@@ -215,8 +204,6 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         from_chat_id=update.effective_chat.id,
                         message_id=update.message.message_id
                     )
-                else:
-                    continue
 
             save_msg(u, msg.message_id)
             success += 1
@@ -224,11 +211,7 @@ async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             fail += 1
 
-    await update.message.reply_text(
-        f"✅ Done\n📊 Sent: {success}\n❌ Failed: {fail}",
-        reply_markup=panel()
-    )
-
+    await update.message.reply_text(f"✅ Sent: {success}\n❌ Failed: {fail}", reply_markup=panel())
     user_mode[uid] = None
 
 # ================= RUN =================
@@ -237,7 +220,12 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
+
+# 🔥 FIX: user custom reply
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, user_reply))
+
+# 🔥 admin handler
 app.add_handler(MessageHandler(filters.ALL, handle))
 
-print("🔥 MASTER BOT RUNNING")
+print("🔥 FINAL PERFECT BOT RUNNING")
 app.run_polling()
