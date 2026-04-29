@@ -11,12 +11,15 @@ from telegram.ext import (
     filters
 )
 
+# ================= CONFIG =================
 BOT_TOKEN = "8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A"
 SUPPORT_BOT_TOKEN = "8671275232:AAFTsTt6ddtLX-0qKlM8knoFVLbRN6GkIW0"
 SUPPORT_CHAT_ID = 7206670618
 
 ADMIN_ID = 7206670618
-CHANNEL_ID = "@ikminvite"
+
+# 🔥 PRIVATE CHANNEL ID
+CHANNEL_ID = -1003928225913
 
 SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
@@ -110,6 +113,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Already got link")
         return
 
+    # 🔥 PRIVATE INVITE LINK
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
@@ -141,12 +145,13 @@ async def countdown(msg, link):
 
     await msg.edit_text("❌ Link expired\n👉 @Shoyabk96")
 
-# ================= JOIN =================
+# ================= JOIN CHECK =================
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     uid = query.from_user.id
+
     member = await context.bot.get_chat_member(CHANNEL_ID, uid)
 
     if member.status in ["member", "administrator", "creator"]:
@@ -212,7 +217,7 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_mode[ADMIN_ID] = None
         return
 
-    # ALBUM FIX
+    # ALBUM
     if msg.media_group_id:
         album = context.user_data.get(msg.media_group_id, [])
         album.append(msg)
@@ -225,9 +230,9 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         media = []
         for m in album:
             if m.photo:
-                media.append(InputMediaPhoto(m.photo[-1].file_id, caption=m.caption or ""))
+                media.append(InputMediaPhoto(m.photo[-1].file_id))
             elif m.video:
-                media.append(InputMediaVideo(m.video.file_id, caption=m.caption or ""))
+                media.append(InputMediaVideo(m.video.file_id))
 
         for u in users:
             try:
@@ -238,27 +243,27 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except:
                 fail += 1
 
-        await msg.reply_text(f"📦 Album Sent ✅{success} ❌{fail}")
+        await msg.reply_text(f"📦 Album Sent {success}")
         admin_mode[ADMIN_ID] = None
         return
 
-    # SINGLE MEDIA
+    # SINGLE
     for u in users:
         try:
             if mode == "broadcast" and msg.text:
                 sent = await context.bot.send_message(u, msg.text)
 
             elif mode == "photo" and msg.photo:
-                sent = await context.bot.send_photo(u, msg.photo[-1].file_id, caption=msg.caption)
+                sent = await context.bot.send_photo(u, msg.photo[-1].file_id)
 
             elif mode == "video" and msg.video:
-                sent = await context.bot.send_video(u, msg.video.file_id, caption=msg.caption)
+                sent = await context.bot.send_video(u, msg.video.file_id)
 
             elif msg.video_note:
                 sent = await context.bot.send_video_note(u, msg.video_note.file_id)
 
             elif msg.audio:
-                sent = await context.bot.send_audio(u, msg.audio.file_id, caption=msg.caption)
+                sent = await context.bot.send_audio(u, msg.audio.file_id)
 
             elif msg.voice:
                 sent = await context.bot.send_voice(u, msg.voice.file_id)
@@ -272,7 +277,7 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             fail += 1
 
-    await msg.reply_text(f"✅ Sent: {success} ❌ {fail}", reply_markup=panel())
+    await msg.reply_text(f"✅ {success} ❌ {fail}", reply_markup=panel())
     admin_mode[ADMIN_ID] = None
 
 # ================= RUN =================
@@ -284,5 +289,5 @@ app.add_handler(CallbackQueryHandler(panel_click))
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
 app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
-print("🔥 FINAL MASTER BOT RUNNING")
+print("🔥 PRIVATE BOT RUNNING")
 app.run_polling()
