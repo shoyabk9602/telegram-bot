@@ -18,7 +18,6 @@ SUPPORT_CHAT_ID = 7206670618
 ADMIN_ID = 7206670618
 CHANNEL_ID = "@ikminvite"
 
-# ================= SUPPORT BOT =================
 SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
 # ================= DATABASE =================
@@ -165,17 +164,9 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or update.message.caption or "Media"
 
-    msg = (
-        f"📩 SUPPORT MSG\n\n"
-        f"👤 @{user.username}\n"
-        f"🆔 ID:{user.id}\n\n"
-        f"{text}"
-    )
+    msg = f"📩 SUPPORT\n👤 @{user.username}\n🆔 ID:{user.id}\n\n{text}"
 
-    await SUPPORT_BOT.send_message(
-        chat_id=SUPPORT_CHAT_ID,
-        text=msg
-    )
+    await SUPPORT_BOT.send_message(chat_id=SUPPORT_CHAT_ID, text=msg)
 
 # ================= PANEL =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -204,6 +195,7 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     users = get_users()
+    msg = update.message
     success, fail = 0, 0
 
     # DELETE
@@ -216,82 +208,81 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 fail += 1
 
         clear_msgs()
-        await update.message.reply_text(f"🧹 Deleted {success}")
+        await msg.reply_text(f"🧹 Deleted {success}")
         admin_mode[ADMIN_ID] = None
         return
 
-    # MULTI ALBUM
-    if update.message.media_group_id:
+    # ALBUM FIX
+    if msg.media_group_id:
+        album = context.user_data.get(msg.media_group_id, [])
+        album.append(msg)
+        context.user_data[msg.media_group_id] = album
+
         await asyncio.sleep(1)
-        album = context.user_data.get("album", [])
-        album.append(update.message)
-        context.user_data["album"] = album
+
+        album = context.user_data.pop(msg.media_group_id, [])
 
         media = []
         for m in album:
             if m.photo:
-                media.append(InputMediaPhoto(m.photo[-1].file_id))
+                media.append(InputMediaPhoto(m.photo[-1].file_id, caption=m.caption or ""))
             elif m.video:
-                media.append(InputMediaVideo(m.video.file_id))
+                media.append(InputMediaVideo(m.video.file_id, caption=m.caption or ""))
 
         for u in users:
             try:
                 msgs = await context.bot.send_media_group(u, media)
-                for msg in msgs:
-                    save_msg(u, msg.message_id)
+                for x in msgs:
+                    save_msg(u, x.message_id)
                 success += 1
             except:
                 fail += 1
 
-        context.user_data["album"] = []
-        await update.message.reply_text(f"📦 Album Sent {success}")
+        await msg.reply_text(f"📦 Album Sent ✅{success} ❌{fail}")
         admin_mode[ADMIN_ID] = None
         return
 
-    # SINGLE
+    # SINGLE MEDIA
     for u in users:
         try:
-            if mode == "broadcast":
-                msg = await context.bot.send_message(u, update.message.text)
+            if mode == "broadcast" and msg.text:
+                sent = await context.bot.send_message(u, msg.text)
 
-            elif mode == "photo" and update.message.photo:
-                msg = await context.bot.send_photo(u, update.message.photo[-1].file_id)
+            elif mode == "photo" and msg.photo:
+                sent = await context.bot.send_photo(u, msg.photo[-1].file_id, caption=msg.caption)
 
-            elif mode == "video" and update.message.video:
-                msg = await context.bot.send_video(u, update.message.video.file_id)
+            elif mode == "video" and msg.video:
+                sent = await context.bot.send_video(u, msg.video.file_id, caption=msg.caption)
 
-            elif mode == "audio":
-                if update.message.audio:
-                    msg = await context.bot.send_audio(u, update.message.audio.file_id)
-                elif update.message.voice:
-                    msg = await context.bot.copy_message(
-                        chat_id=u,
-                        from_chat_id=update.effective_chat.id,
-                        message_id=update.message.message_id
-                    )
+            elif msg.video_note:
+                sent = await context.bot.send_video_note(u, msg.video_note.file_id)
 
-            save_msg(u, msg.message_id)
+            elif msg.audio:
+                sent = await context.bot.send_audio(u, msg.audio.file_id, caption=msg.caption)
+
+            elif msg.voice:
+                sent = await context.bot.send_voice(u, msg.voice.file_id)
+
+            else:
+                continue
+
+            save_msg(u, sent.message_id)
             success += 1
+
         except:
             fail += 1
 
-    await update.message.reply_text(f"✅ {success} ❌ {fail}", reply_markup=panel())
+    await msg.reply_text(f"✅ Sent: {success} ❌ {fail}", reply_markup=panel())
     admin_mode[ADMIN_ID] = None
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-
-# BUTTON FIX
 app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
-
-# SUPPORT
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
-
-# ADMIN
 app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
-print("🔥 FINAL BOT RUNNING")
+print("🔥 FINAL MASTER BOT RUNNING")
 app.run_polling()
