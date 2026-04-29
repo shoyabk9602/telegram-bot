@@ -73,7 +73,7 @@ async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"🔥 *LIMITED ACCESS INVITE*\n\n👉 {link}\n\n⏳ {i} sec\n\n⚠️ Jaldi join karo!",
+                f"🔥 *LIMITED ACCESS*\n\n👉 {link}\n\n⏳ {i} sec",
                 parse_mode="Markdown",
                 reply_markup=join_button()
             )
@@ -82,29 +82,14 @@ async def countdown(msg, link):
         await asyncio.sleep(1)
 
     await msg.edit_text(
-        "❌ *LINK EXPIRED*\n\n👉 https://t.me/Shoyabk96\nNaya link ke liye message karo",
+        "❌ LINK EXPIRED\n👉 https://t.me/Shoyabk96",
         parse_mode="Markdown"
     )
 
 # ================= INVITE =================
 async def send_link(update, context):
-    user = update.effective_user
-    user_id = user.id
-    username = f"@{user.username}" if user.username else "No username"
-
+    user_id = update.effective_user.id
     save_user(user_id)
-
-    text = update.message.text.lower() if update.message.text else ""
-
-    if text == "shoyabtest":
-        link = await context.bot.create_chat_invite_link(
-            chat_id=CHANNEL_ID,
-            member_limit=1,
-            expire_date=datetime.utcnow() + timedelta(seconds=60)
-        )
-        msg = await update.message.reply_text(f"🧪 TEST\n{link.invite_link}")
-        asyncio.create_task(countdown(msg, link.invite_link))
-        return
 
     if user_id in user_links:
         await update.message.reply_text("❌ Already got link")
@@ -120,22 +105,14 @@ async def send_link(update, context):
     user_links[user_id] = invite_link
     add_link()
 
-    links, joins = get_stats()
-
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📢 NEW LINK\n👤 {username}\n🆔 {user_id}\n\n🔗 {invite_link}\n📊 {links} | {joins}"
-    )
-
     msg = await update.message.reply_text(
-        f"🔥 *LIMITED ACCESS*\n\n👉 {invite_link}\n⏳ 60 sec only\n⚠️ Join fast!",
-        parse_mode="Markdown",
+        f"🔥 Join fast!\n👉 {invite_link}",
         reply_markup=join_button()
     )
 
     asyncio.create_task(countdown(msg, invite_link))
 
-# ================= VERIFY BUTTON =================
+# ================= VERIFY =================
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -147,97 +124,53 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
             joined_users.add(user_id)
             add_join()
 
-        await query.edit_message_text("🎉 Joined Successfully")
+        await query.edit_message_text("🎉 Joined")
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= AUTO JOIN =================
-async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.chat_member.chat.username != CHANNEL_ID.replace("@", ""):
-        return
-
-    user_id = update.chat_member.new_chat_member.user.id
-    status = update.chat_member.new_chat_member.status
-
-    if status in ["member", "administrator", "creator"]:
-        if user_id not in joined_users:
-            joined_users.add(user_id)
-            add_join()
-
-# ================= BROADCAST =================
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    msg = " ".join(context.args).replace("\\n", "\n")
-
-    for u in get_users():
-        await context.bot.send_message(u, msg)
-
-    await update.message.reply_text("✅ Broadcast Done")
-
-# ================= PHOTO =================
-async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    file_id = update.message.reply_to_message.photo[-1].file_id
-    caption = " ".join(context.args).replace("\\n", "\n")
-
-    for u in get_users():
-        await context.bot.send_photo(u, file_id, caption=caption)
-
-    await update.message.reply_text("📸 Done")
-
-# ================= VIDEO =================
-async def video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    file_id = update.message.reply_to_message.video.file_id
-    caption = " ".join(context.args).replace("\\n", "\n")
-
-    for u in get_users():
-        await context.bot.send_video(u, file_id, caption=caption)
-
-    await update.message.reply_text("🎬 Done")
-
-# ================= AUDIO =================
+# ================= AUDIO FIX =================
 async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    file_id = update.message.reply_to_message.audio.file_id
+    if not update.message.reply_to_message:
+        await update.message.reply_text("❌ Reply to audio/voice")
+        return
+
+    msg = update.message.reply_to_message
     caption = " ".join(context.args).replace("\\n", "\n")
 
+    success, fail = 0, 0
+
     for u in get_users():
-        await context.bot.send_audio(u, file_id, caption=caption)
+        try:
+            # 🔥 AUDIO FILE
+            if msg.audio:
+                await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
 
-    await update.message.reply_text("🎧 Done")
+            # 🔥 VOICE NOTE
+            elif msg.voice:
+                await context.bot.send_voice(u, msg.voice.file_id)
 
-# ================= USERS =================
-async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"👥 {len(get_users())}")
+            else:
+                await update.message.reply_text("❌ Not audio/voice")
+                return
 
-# ================= STATS =================
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    l, j = get_stats()
-    await update.message.reply_text(f"📊 Links: {l}\n✅ Joins: {j}")
+            success += 1
+        except:
+            fail += 1
+
+    await update.message.reply_text(f"🎧 Sent: {success} | ❌ {fail}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", send_link))
-app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("photo", photo))
-app.add_handler(CommandHandler("video", video))
 app.add_handler(CommandHandler("audio", audio))
-app.add_handler(CommandHandler("users", users))
-app.add_handler(CommandHandler("stats", stats))
 
 app.add_handler(CallbackQueryHandler(check_join))
 app.add_handler(ChatMemberHandler(track_join, ChatMemberHandler.CHAT_MEMBER))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
 
-print("🔥 ULTIMATE BOT RUNNING")
+print("🔥 AUDIO FIX BOT RUNNING")
 app.run_polling()
