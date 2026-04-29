@@ -162,7 +162,8 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
-    msg = " ".join(context.args)
+    msg = " ".join(context.args).replace("\\n", "\n")
+
     success, fail = 0, 0
 
     for u in get_users():
@@ -174,7 +175,7 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"📊 {success} sent | {fail} failed")
 
-# ================= PHOTO (FIXED) =================
+# ================= PHOTO (ENTER SUPPORT) =================
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -188,7 +189,9 @@ async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     file_id = update.message.reply_to_message.photo[-1].file_id
-    caption = " ".join(context.args) if context.args else ""
+
+    raw_caption = " ".join(context.args) if context.args else ""
+    caption = raw_caption.replace("\\n", "\n")
 
     success, fail = 0, 0
 
