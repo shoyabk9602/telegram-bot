@@ -18,12 +18,37 @@ CHANNEL_ID = "@ikminvite"
 # ================= DATABASE =================
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
-cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
+
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    user_id INTEGER PRIMARY KEY,
+    got_link INTEGER DEFAULT 0,
+    joined INTEGER DEFAULT 0
+)
+""")
 conn.commit()
 
 def save_user(uid):
-    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
+    cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
     conn.commit()
+
+def set_link(uid):
+    cursor.execute("UPDATE users SET got_link=1 WHERE user_id=?", (uid,))
+    conn.commit()
+
+def set_join(uid):
+    cursor.execute("UPDATE users SET joined=1 WHERE user_id=?", (uid,))
+    conn.commit()
+
+def has_link(uid):
+    cursor.execute("SELECT got_link FROM users WHERE user_id=?", (uid,))
+    row = cursor.fetchone()
+    return row and row[0] == 1
+
+def has_joined(uid):
+    cursor.execute("SELECT joined FROM users WHERE user_id=?", (uid,))
+    row = cursor.fetchone()
+    return row and row[0] == 1
 
 def get_users():
     cursor.execute("SELECT user_id FROM users")
@@ -55,30 +80,42 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     save_user(uid)
 
-    # 🔥 USER SYSTEM
-    if uid != ADMIN_ID:
-        link = await context.bot.create_chat_invite_link(
-            chat_id=CHANNEL_ID,
-            member_limit=1,
-            expire_date=datetime.utcnow() + timedelta(seconds=60)
-        )
-
-        # 🔥 ADMIN NOTIFICATION FIX
-        await context.bot.send_message(
-            ADMIN_ID,
-            f"📢 NEW LINK\n\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
-        )
-
-        msg = await update.message.reply_text(
-            f"🔥 VIP ACCESS\n\n👉 {link.invite_link}\n⏳ 60 sec\n⚠️ Join fast!",
-            reply_markup=join_btn()
-        )
-
-        asyncio.create_task(countdown(msg, link.invite_link))
+    # 🔥 ADMIN PANEL
+    if uid == ADMIN_ID:
+        await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
         return
 
-    # 🔥 ADMIN PANEL
-    await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
+    # 🔥 ALREADY JOINED
+    if has_joined(uid):
+        await update.message.reply_text("✅ Tum already join kar chuke ho")
+        return
+
+    # 🔥 ALREADY GOT LINK
+    if has_link(uid):
+        await update.message.reply_text("❌ Tum already link le chuke ho\nJoin karo pehle")
+        return
+
+    # 🔥 CREATE LINK (ONLY ONCE)
+    link = await context.bot.create_chat_invite_link(
+        chat_id=CHANNEL_ID,
+        member_limit=1,
+        expire_date=datetime.utcnow() + timedelta(seconds=60)
+    )
+
+    set_link(uid)
+
+    # 🔔 ADMIN NOTIFICATION
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"📢 NEW LINK\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
+    )
+
+    msg = await update.message.reply_text(
+        f"🔥 VIP ACCESS\n\n👉 {link.invite_link}\n⏳ 60 sec\n⚠️ Join fast!",
+        reply_markup=join_btn()
+    )
+
+    asyncio.create_task(countdown(msg, link.invite_link))
 
 # ================= COUNTDOWN =================
 async def countdown(msg, link):
@@ -93,6 +130,25 @@ async def countdown(msg, link):
         await asyncio.sleep(1)
 
     await msg.edit_text("❌ LINK EXPIRED\n👉 @Shoyabk96")
+
+# ================= JOIN VERIFY =================
+async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    uid = query.from_user.id
+
+    try:
+        member = await context.bot.get_chat_member(CHANNEL_ID, uid)
+
+        if member.status in ["member", "administrator", "creator"]:
+            set_join(uid)
+            await query.edit_message_text("🎉 Joined Successfully ✅")
+        else:
+            await query.answer("❌ Pehle join karo", show_alert=True)
+
+    except Exception as e:
+        await query.answer("⚠️ Error checking join", show_alert=True)
 
 # ================= PANEL CLICK =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -134,31 +190,15 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(u, caption)
 
             elif mode == "photo" and update.message.photo:
-                await context.bot.send_photo(
-                    u,
-                    update.message.photo[-1].file_id,
-                    caption=caption
-                )
+                await context.bot.send_photo(u, update.message.photo[-1].file_id, caption=caption)
 
             elif mode == "video" and update.message.video:
-                await context.bot.send_video(
-                    u,
-                    update.message.video.file_id,
-                    caption=caption
-                )
+                await context.bot.send_video(u, update.message.video.file_id, caption=caption)
 
             elif mode == "audio":
                 msg = update.message
-
-                # 🎧 AUDIO
                 if msg.audio:
-                    await context.bot.send_audio(
-                        u,
-                        msg.audio.file_id,
-                        caption=caption
-                    )
-
-                # 🎤 VOICE FIX (IMPORTANT)
+                    await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
                 elif msg.voice:
                     await context.bot.copy_message(
                         chat_id=u,
@@ -178,19 +218,6 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_mode[uid] = None
 
-# ================= JOIN CHECK =================
-async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    user_id = query.from_user.id
-    member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
-
-    if member.status in ["member", "administrator", "creator"]:
-        await query.edit_message_text("🎉 Joined Successfully")
-    else:
-        await query.answer("❌ Join first", show_alert=True)
-
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -199,5 +226,5 @@ app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
 app.add_handler(MessageHandler(filters.ALL, handle_admin))
 
-print("🔥 FINAL PERFECT BOT RUNNING")
+print("🔥 FINAL FIXED BOT RUNNING")
 app.run_polling()
