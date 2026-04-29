@@ -11,6 +11,7 @@ from telegram.ext import (
     filters
 )
 
+# ================= CONFIG =================
 BOT_TOKEN = "8675239901:AAHO4PJRuLMxZ_HgFzrFE3q5xP3ZMMxYBr4"
 SUPPORT_BOT_TOKEN = "8742370126:AAFZpYXPlsEASY4l6lABj6kgxluAqW_t5n4"
 SUPPORT_CHAT_ID = 8338253309
@@ -22,7 +23,9 @@ CHANNEL_ID = -1003685301571
 
 SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
-# ================= DB =================
+SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
+
+# ================= DATABASE =================
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -37,6 +40,7 @@ joined INTEGER DEFAULT 0
 cursor.execute("CREATE TABLE IF NOT EXISTS msgs (user_id INTEGER, msg_id INTEGER)")
 conn.commit()
 
+# ================= DB =================
 def save_user(uid):
     cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
     conn.commit()
@@ -111,7 +115,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Already got link")
         return
 
-    # invite
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
@@ -120,33 +123,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     set_link(uid)
 
-    # admin notify
     await context.bot.send_message(
         ADMIN_ID,
         f"📢 NEW USER\n👤 {name}\n🆔 {uid}\n🔗 {link.invite_link}"
     )
 
-    # 🔥 CUSTOM MESSAGE
     msg = await update.message.reply_text(
         f"<b>Hey 👋 {name}</b>\n\n"
         f"🔥 <b>VIP Access Unlock!</b>\n\n"
         f"💸 Yaha tumhe exclusive content milega\n\n"
         f"👉 <a href='{link.invite_link}'>Join Now</a>\n\n"
-        f"⏳ <b>Only 60 sec left!</b>\n"
+        f"⏳ <b>60 sec remaining</b>\n"
         f"⚠️ Jaldi join karo warna link expire ho jayega!",
         reply_markup=join_btn(),
         parse_mode="HTML"
     )
 
-    asyncio.create_task(countdown(msg, link.invite_link))
+    asyncio.create_task(countdown(msg, link.invite_link, name))
 
 # ================= COUNTDOWN =================
-async def countdown(msg, link):
+async def countdown(msg, link, name):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"👉 {link}\n⏳ {i}s",
-                reply_markup=join_btn()
+                f"<b>Hey 👋 {name}</b>\n\n"
+                f"🔥 <b>VIP Access Unlock!</b>\n\n"
+                f"💸 Yaha tumhe exclusive content milega\n\n"
+                f"👉 <a href='{link}'>Join Now</a>\n\n"
+                f"⏳ <b>{i} sec remaining</b>\n"
+                f"⚠️ Jaldi join karo warna link expire ho jayega!",
+                reply_markup=join_btn(),
+                parse_mode="HTML"
             )
         except:
             pass
@@ -211,7 +218,6 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = update.message
     success, fail = 0, 0
 
-    # DELETE
     if mode == "delete":
         for u, mid in get_msgs():
             try:
@@ -224,37 +230,9 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_mode[ADMIN_ID] = None
         return
 
-    # ALBUM
-    if msg.media_group_id:
-        album = context.user_data.get(msg.media_group_id, [])
-        album.append(msg)
-        context.user_data[msg.media_group_id] = album
-        await asyncio.sleep(1)
-
-        album = context.user_data.pop(msg.media_group_id, [])
-
-        media = []
-        for m in album:
-            if m.photo:
-                media.append(InputMediaPhoto(m.photo[-1].file_id))
-            elif m.video:
-                media.append(InputMediaVideo(m.video.file_id))
-
-        for u in users:
-            try:
-                await context.bot.send_media_group(u, media)
-                success += 1
-            except:
-                fail += 1
-
-        await msg.reply_text(f"Album Sent {success}")
-        admin_mode[ADMIN_ID] = None
-        return
-
-    # SINGLE
     for u in users:
         try:
-            if mode == "broadcast" and msg.text:
+            if msg.text:
                 await context.bot.send_message(u, msg.text)
             elif msg.photo:
                 await context.bot.send_photo(u, msg.photo[-1].file_id)
