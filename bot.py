@@ -19,111 +19,105 @@ CHANNEL_ID = "@ikminvite"
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
-cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, got_link INTEGER DEFAULT 0, joined INTEGER DEFAULT 0)")
+cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
 conn.commit()
 
-# ================= DB =================
 def save_user(uid):
-    cursor.execute("INSERT OR IGNORE INTO users (user_id) VALUES (?)", (uid,))
+    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
     conn.commit()
 
-def set_link(uid):
-    cursor.execute("UPDATE users SET got_link=1 WHERE user_id=?", (uid,))
-    conn.commit()
+def get_users():
+    cursor.execute("SELECT user_id FROM users")
+    return [x[0] for x in cursor.fetchall()]
 
-def has_link(uid):
-    cursor.execute("SELECT got_link FROM users WHERE user_id=?", (uid,))
-    row = cursor.fetchone()
-    return row and row[0] == 1
-
-def set_join(uid):
-    cursor.execute("UPDATE users SET joined=1 WHERE user_id=?", (uid,))
-    conn.commit()
-
-def has_join(uid):
-    cursor.execute("SELECT joined FROM users WHERE user_id=?", (uid,))
-    row = cursor.fetchone()
-    return row and row[0] == 1
-
-# ================= BUTTON =================
-def join_btn():
+# ================= PANEL =================
+def panel():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ I Joined", callback_data="join_check")]
+        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")],
+        [InlineKeyboardButton("📸 Photo", callback_data="photo")],
+        [InlineKeyboardButton("🎬 Video", callback_data="video")],
+        [InlineKeyboardButton("🎧 Audio/Voice", callback_data="audio")],
+        [InlineKeyboardButton("👥 Users", callback_data="users")]
     ])
+
+admin_mode = {}
 
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    uid = user.id
-    username = f"@{user.username}" if user.username else "NoUsername"
-
+    uid = update.effective_user.id
     save_user(uid)
 
-    # ADMIN PANEL
+    # ADMIN
     if uid == ADMIN_ID:
-        await update.message.reply_text("🎛️ Admin Panel Ready")
+        await update.message.reply_text("🎛️ Panel", reply_markup=panel())
         return
 
-    # ALREADY JOINED
-    if has_join(uid):
-        await update.message.reply_text("✅ Tum already join kar chuke ho")
-        return
-
-    # ALREADY GOT LINK
-    if has_link(uid):
-        await update.message.reply_text("❌ Tum already link le chuke ho\nJoin karo pehle")
-        return
-
-    # CREATE LINK
+    # USER INVITE
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
-    set_link(uid)
-
-    # ADMIN NOTIFICATION
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📢 NEW USER\n👤 {username}\n🆔 {uid}\n🔗 {link.invite_link}"
+    await update.message.reply_text(
+        f"🔥 Join karo\n👉 {link.invite_link}"
     )
 
-    msg = await update.message.reply_text(
-        f"🔥 VIP ACCESS\n\n👉 {link.invite_link}\n⏳ 60 sec",
-        reply_markup=join_btn()
-    )
-
-    asyncio.create_task(countdown(msg, link.invite_link))
-
-# ================= COUNTDOWN =================
-async def countdown(msg, link):
-    for i in range(60, 0, -1):
-        try:
-            await msg.edit_text(
-                f"👉 {link}\n⏳ {i}s",
-                reply_markup=join_btn()
-            )
-        except:
-            pass
-        await asyncio.sleep(1)
-
-    await msg.edit_text("❌ Link expired\n👉 @Shoyabk96")
-
-# ================= JOIN CHECK =================
-async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= PANEL CLICK =================
+async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    uid = query.from_user.id
+    if query.from_user.id != ADMIN_ID:
+        return
 
-    member = await context.bot.get_chat_member(CHANNEL_ID, uid)
+    mode = query.data
+    admin_mode[ADMIN_ID] = mode
 
-    if member.status in ["member", "administrator", "creator"]:
-        set_join(uid)
-        await query.edit_message_text("🎉 Joined Successfully")
-    else:
-        await query.answer("❌ Pehle join karo", show_alert=True)
+    if mode == "users":
+        await query.message.reply_text(f"👥 {len(get_users())}")
+        return
+
+    await query.message.reply_text(f"👉 {mode.upper()} MODE ON")
+
+# ================= ADMIN ACTION =================
+async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    mode = admin_mode.get(ADMIN_ID)
+    if not mode:
+        return
+
+    success, fail = 0, 0
+
+    for u in get_users():
+        try:
+            if mode == "broadcast" and update.message.text:
+                await context.bot.send_message(u, update.message.text)
+
+            elif mode == "photo" and update.message.photo:
+                await context.bot.send_photo(u, update.message.photo[-1].file_id)
+
+            elif mode == "video" and update.message.video:
+                await context.bot.send_video(u, update.message.video.file_id)
+
+            elif mode == "audio":
+                if update.message.audio:
+                    await context.bot.send_audio(u, update.message.audio.file_id)
+                elif update.message.voice:
+                    await context.bot.copy_message(
+                        chat_id=u,
+                        from_chat_id=update.effective_chat.id,
+                        message_id=update.message.message_id
+                    )
+
+            success += 1
+        except:
+            fail += 1
+
+    await update.message.reply_text(f"✅ {success} ❌ {fail}", reply_markup=panel())
+    admin_mode[ADMIN_ID] = None
 
 # ================= SUPPORT FORWARD =================
 async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -136,7 +130,7 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(
         ADMIN_ID,
-        f"📩 SUPPORT MSG\n\n👤 @{user.username}\n🆔 ID:{user.id}\n\n{text}"
+        f"📩 SUPPORT\n👤 @{user.username}\n🆔 ID:{user.id}\n\n{text}"
     )
 
 # ================= ADMIN REPLY =================
@@ -160,11 +154,12 @@ async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(join_check))
+app.add_handler(CallbackQueryHandler(panel_click))
 
-# ORDER VERY IMPORTANT
+# 🔥 ORDER FIX (MOST IMPORTANT)
 app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, reply_user))
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
+app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
-print("🔥 FINAL BOT RUNNING")
+print("🔥 FINAL WORKING BOT")
 app.run_polling()
