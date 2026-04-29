@@ -21,251 +21,159 @@ conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
-cursor.execute("CREATE TABLE IF NOT EXISTS stats (date TEXT, links INTEGER, joins INTEGER)")
 conn.commit()
 
-def today():
-    return datetime.now().strftime("%Y-%m-%d")
-
-def save_user(user_id):
-    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (user_id,))
+def save_user(uid):
+    cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
     conn.commit()
 
 def get_users():
     cursor.execute("SELECT user_id FROM users")
     return [x[0] for x in cursor.fetchall()]
 
-def add_link():
-    cursor.execute("SELECT links FROM stats WHERE date=?", (today(),))
-    row = cursor.fetchone()
-    if row:
-        cursor.execute("UPDATE stats SET links=links+1 WHERE date=?", (today(),))
-    else:
-        cursor.execute("INSERT INTO stats VALUES (?,1,0)", (today(),))
-    conn.commit()
+# ================= PANEL =================
+def panel():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")],
+        [InlineKeyboardButton("📸 Photo", callback_data="photo")],
+        [InlineKeyboardButton("🎬 Video", callback_data="video")],
+        [InlineKeyboardButton("🎧 Audio", callback_data="audio")],
+        [InlineKeyboardButton("📊 Stats", callback_data="stats"),
+         InlineKeyboardButton("👥 Users", callback_data="users")]
+    ])
 
-def add_join():
-    cursor.execute("SELECT joins FROM stats WHERE date=?", (today(),))
-    row = cursor.fetchone()
-    if row:
-        cursor.execute("UPDATE stats SET joins=joins+1 WHERE date=?", (today(),))
-    else:
-        cursor.execute("INSERT INTO stats VALUES (?,0,1)", (today(),))
-    conn.commit()
+user_mode = {}
 
-def get_stats():
-    cursor.execute("SELECT links, joins FROM stats WHERE date=?", (today(),))
-    row = cursor.fetchone()
-    return row if row else (0, 0)
-
-# ================= GLOBAL =================
-user_links = {}
-joined_users = set()
-
+# ================= JOIN BUTTON =================
 def join_btn():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ I Joined", callback_data="join_check")]
     ])
 
-# ================= INVITE =================
+# ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    user_id = user.id
-    username = f"@{user.username}" if user.username else "NoUsername"
+    save_user(user.id)
 
-    save_user(user_id)
-
-    if user_id in user_links:
-        await update.message.reply_text("❌ Tum already link le chuke ho")
-        return
-
+    # 🔥 USER INVITE SYSTEM
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
-    invite = link.invite_link
-    user_links[user_id] = invite
-    add_link()
-
-    links, joins = get_stats()
-
-    # 🔥 ADMIN NOTIFICATION
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📢 NEW LINK\n👤 {username}\n🆔 {user_id}\n\n🔗 {invite}\n📊 Links:{links} Joins:{joins}"
-    )
-
-    # 🔥 HIGH CONVERT MESSAGE
     msg = await update.message.reply_text(
         f"🔥 *LIMITED VIP ACCESS*\n\n"
-        f"🚨 Ye private channel sabko nahi milta\n"
-        f"⚡ Sirf selected users ko entry mil rahi hai\n\n"
-        f"👉 *Tumhara personal invite link:*\n{invite}\n\n"
-        f"⏳ *60 sec me expire ho jayega*\n"
-        f"❌ Forward karne se kaam nahi karega\n\n"
-        f"⚠️ *Abhi join karo warna access chala jayega!*",
+        f"👉 {link.invite_link}\n\n"
+        f"⏳ 60 sec only\n⚠️ Join fast!",
         parse_mode="Markdown",
         reply_markup=join_btn()
     )
 
-    asyncio.create_task(countdown(msg, invite))
+    asyncio.create_task(countdown(msg, link.invite_link))
+
+    # 🔥 ADMIN PANEL
+    if user.id == ADMIN_ID:
+        await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
 
 # ================= COUNTDOWN =================
 async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"🔥 *VIP ACCESS*\n\n👉 {link}\n\n⏳ {i} sec\n⚠️ Jaldi join karo!",
-                parse_mode="Markdown",
+                f"🔥 {link}\n⏳ {i}s",
                 reply_markup=join_btn()
             )
         except:
             pass
         await asyncio.sleep(1)
 
-    await msg.edit_text(
-        "❌ *LINK EXPIRED*\n\n📩 Naya link lene ke liye 👉 @Shoyabk96",
-        parse_mode="Markdown"
-    )
+    await msg.edit_text("❌ LINK EXPIRED\n👉 @Shoyabk96")
 
-# ================= BUTTON FIX =================
+# ================= JOIN VERIFY =================
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
 
-    try:
-        member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
+    member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
 
-        if member.status in ["member", "administrator", "creator"]:
-            if user_id not in joined_users:
-                joined_users.add(user_id)
-                add_join()
+    if member.status in ["member", "administrator", "creator"]:
+        await query.edit_message_text("🎉 Joined Successfully")
+    else:
+        await query.answer("❌ Join first", show_alert=True)
 
-            await query.edit_message_text("🎉 Joined Successfully ✅")
-        else:
-            await query.answer("❌ Pehle join karo", show_alert=True)
+# ================= PANEL CLICK =================
+async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
 
-    except Exception as e:
-        await query.answer("❌ Error", show_alert=True)
-
-# ================= AUTO JOIN =================
-async def auto_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat = update.chat_member.chat
-
-    if chat.username != CHANNEL_ID.replace("@", ""):
+    uid = query.from_user.id
+    if uid != ADMIN_ID:
         return
 
-    user_id = update.chat_member.new_chat_member.user.id
-    status = update.chat_member.new_chat_member.status
+    mode = query.data
+    user_mode[uid] = mode
 
-    if status in ["member", "administrator", "creator"]:
-        if user_id not in joined_users:
-            joined_users.add(user_id)
-            add_join()
+    await query.message.reply_text(f"👉 {mode.upper()} mode active")
 
-# ================= BROADCAST (FIXED REPORT) =================
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+# ================= HANDLE =================
+async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    save_user(uid)
+
+    if uid != ADMIN_ID:
         return
 
-    msg = " ".join(context.args).replace("\\n", "\n")
+    mode = user_mode.get(uid)
 
-    success, fail = 0, 0
+    if mode == "broadcast":
+        msg = update.message.text
+        success, fail = 0, 0
 
-    for u in get_users():
-        try:
-            await context.bot.send_message(u, msg)
-            success += 1
-            await asyncio.sleep(0.03)
-        except:
-            fail += 1
+        for u in get_users():
+            try:
+                await context.bot.send_message(u, msg)
+                success += 1
+            except:
+                fail += 1
 
-    await update.message.reply_text(
-        f"📊 REPORT\n\n✅ Sent: {success}\n❌ Failed: {fail}"
-    )
+        await update.message.reply_text(f"📢 Sent:{success} ❌:{fail}", reply_markup=panel())
+        user_mode[uid] = None
 
-# ================= PHOTO =================
-async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
+    elif mode == "photo" and update.message.photo:
+        file_id = update.message.photo[-1].file_id
+        for u in get_users():
+            await context.bot.send_photo(u, file_id)
+        await update.message.reply_text("📸 Done", reply_markup=panel())
+        user_mode[uid] = None
 
-    msg = update.message.reply_to_message
-    caption = " ".join(context.args).replace("\\n", "\n")
+    elif mode == "video" and update.message.video:
+        file_id = update.message.video.file_id
+        for u in get_users():
+            await context.bot.send_video(u, file_id)
+        await update.message.reply_text("🎬 Done", reply_markup=panel())
+        user_mode[uid] = None
 
-    success, fail = 0, 0
-
-    for u in get_users():
-        try:
-            await context.bot.send_photo(u, msg.photo[-1].file_id, caption=caption)
-            success += 1
-        except:
-            fail += 1
-
-    await update.message.reply_text(f"📸 Sent:{success} ❌:{fail}")
-
-# ================= VIDEO =================
-async def video(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    msg = update.message.reply_to_message
-    caption = " ".join(context.args).replace("\\n", "\n")
-
-    success, fail = 0, 0
-
-    for u in get_users():
-        try:
-            await context.bot.send_video(u, msg.video.file_id, caption=caption)
-            success += 1
-        except:
-            fail += 1
-
-    await update.message.reply_text(f"🎬 Sent:{success} ❌:{fail}")
-
-# ================= AUDIO =================
-async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    msg = update.message.reply_to_message
-    caption = " ".join(context.args).replace("\\n", "\n")
-
-    success, fail = 0, 0
-
-    for u in get_users():
-        try:
+    elif mode == "audio":
+        msg = update.message
+        for u in get_users():
             if msg.audio:
-                await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+                await context.bot.send_audio(u, msg.audio.file_id)
             elif msg.voice:
                 await context.bot.send_voice(u, msg.voice.file_id)
-            success += 1
-        except:
-            fail += 1
 
-    await update.message.reply_text(f"🎧 Sent:{success} ❌:{fail}")
-
-# ================= STATS =================
-async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    l, j = get_stats()
-    await update.message.reply_text(f"📊 Links:{l}\nJoins:{j}")
+        await update.message.reply_text("🎧 Done", reply_markup=panel())
+        user_mode[uid] = None
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("broadcast", broadcast))
-app.add_handler(CommandHandler("photo", photo))
-app.add_handler(CommandHandler("video", video))
-app.add_handler(CommandHandler("audio", audio))
-app.add_handler(CommandHandler("stats", stats))
+app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
+app.add_handler(CallbackQueryHandler(panel_click))
+app.add_handler(MessageHandler(filters.ALL, handle))
 
-app.add_handler(CallbackQueryHandler(join_check))
-app.add_handler(ChatMemberHandler(auto_join, ChatMemberHandler.CHAT_MEMBER))
-app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))
-
-print("🔥 FINAL FIXED BOT RUNNING")
+print("🔥 FINAL PANEL BOT RUNNING")
 app.run_polling()
