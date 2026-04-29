@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import asyncio
 import sqlite3
+import requests
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo
 from telegram.ext import (
     ApplicationBuilder,
@@ -12,6 +13,9 @@ from telegram.ext import (
 )
 
 BOT_TOKEN = "8640066413:AAEjpnv1DMFsux3mhGkT6EoS1-_zY51uz8A"
+SUPPORT_BOT_TOKEN = "8671275232:AAFTsTt6ddtLX-0qKlM8knoFVLbRN6GkIW0"
+SUPPORT_CHAT_ID = 7206670618
+
 ADMIN_ID = 7206670618
 CHANNEL_ID = "@ikminvite"
 
@@ -150,7 +154,7 @@ async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= SUPPORT =================
+# ================= SUPPORT BOT =================
 async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -159,24 +163,18 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or update.message.caption or "Media"
 
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📩 SUPPORT\n👤 @{user.username}\n🆔 ID:{user.id}\n\n{text}"
+    msg = (
+        f"📩 SUPPORT MSG\n\n"
+        f"👤 @{user.username}\n"
+        f"🆔 ID:{user.id}\n\n"
+        f"{text}"
     )
 
-# ================= ADMIN REPLY =================
-async def reply_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
-        return
-
-    if not update.message.reply_to_message:
-        return
-
-    text = update.message.reply_to_message.text
-
-    if "ID:" in text:
-        uid = int(text.split("ID:")[1].split("\n")[0])
-        await context.bot.send_message(uid, f"📩 Support:\n\n{update.message.text}")
+    url = f"https://api.telegram.org/bot{SUPPORT_BOT_TOKEN}/sendMessage"
+    requests.post(url, json={
+        "chat_id": SUPPORT_CHAT_ID,
+        "text": msg
+    })
 
 # ================= PANEL =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -221,7 +219,7 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_mode[ADMIN_ID] = None
         return
 
-    # MULTI PHOTO / VIDEO
+    # MULTI ALBUM
     if update.message.media_group_id:
         await asyncio.sleep(1)
         album = context.user_data.get("album", [])
@@ -283,12 +281,15 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(join_check))
+
+# 🔥 FIXED BUTTONS
+app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
 
-# ORDER IMPORTANT
-app.add_handler(MessageHandler(filters.TEXT & filters.REPLY, reply_user))
+# 🔥 SUPPORT
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
+
+# 🔥 ADMIN
 app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
 print("🔥 FINAL BOT RUNNING")
