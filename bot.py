@@ -51,14 +51,22 @@ def join_btn():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
+    username = f"@{user.username}" if user.username else "NoUsername"
+
     save_user(uid)
 
-    # 🔥 USER INVITE SYSTEM
+    # 🔥 USER SYSTEM
     if uid != ADMIN_ID:
         link = await context.bot.create_chat_invite_link(
             chat_id=CHANNEL_ID,
             member_limit=1,
             expire_date=datetime.utcnow() + timedelta(seconds=60)
+        )
+
+        # 🔥 ADMIN NOTIFICATION FIX
+        await context.bot.send_message(
+            ADMIN_ID,
+            f"📢 NEW LINK\n\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
         )
 
         msg = await update.message.reply_text(
@@ -69,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(countdown(msg, link.invite_link))
         return
 
-    # 🔥 ADMIN ONLY PANEL
+    # 🔥 ADMIN PANEL
     await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
 
 # ================= COUNTDOWN =================
@@ -93,7 +101,7 @@ async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     uid = query.from_user.id
     if uid != ADMIN_ID:
-        return  # 🔥 user ko ignore
+        return
 
     mode = query.data
     user_mode[uid] = mode
@@ -109,7 +117,7 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
 
     if uid != ADMIN_ID:
-        return  # 🔥 user messages ignore
+        return
 
     mode = user_mode.get(uid)
     if not mode:
@@ -126,15 +134,31 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(u, caption)
 
             elif mode == "photo" and update.message.photo:
-                await context.bot.send_photo(u, update.message.photo[-1].file_id, caption=caption)
+                await context.bot.send_photo(
+                    u,
+                    update.message.photo[-1].file_id,
+                    caption=caption
+                )
 
             elif mode == "video" and update.message.video:
-                await context.bot.send_video(u, update.message.video.file_id, caption=caption)
+                await context.bot.send_video(
+                    u,
+                    update.message.video.file_id,
+                    caption=caption
+                )
 
             elif mode == "audio":
                 msg = update.message
+
+                # 🎧 AUDIO
                 if msg.audio:
-                    await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+                    await context.bot.send_audio(
+                        u,
+                        msg.audio.file_id,
+                        caption=caption
+                    )
+
+                # 🎤 VOICE FIX (IMPORTANT)
                 elif msg.voice:
                     await context.bot.copy_message(
                         chat_id=u,
@@ -175,5 +199,5 @@ app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
 app.add_handler(MessageHandler(filters.ALL, handle_admin))
 
-print("🔥 FINAL PANEL FIXED BOT RUNNING")
+print("🔥 FINAL PERFECT BOT RUNNING")
 app.run_polling()
