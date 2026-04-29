@@ -7,7 +7,6 @@ from telegram.ext import (
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    ChatMemberHandler,
     ContextTypes,
     filters
 )
@@ -19,7 +18,6 @@ CHANNEL_ID = "@ikminvite"
 # ================= DATABASE =================
 conn = sqlite3.connect("users.db", check_same_thread=False)
 cursor = conn.cursor()
-
 cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
 conn.commit()
 
@@ -38,8 +36,7 @@ def panel():
         [InlineKeyboardButton("📸 Photo", callback_data="photo")],
         [InlineKeyboardButton("🎬 Video", callback_data="video")],
         [InlineKeyboardButton("🎧 Audio", callback_data="audio")],
-        [InlineKeyboardButton("📊 Stats", callback_data="stats"),
-         InlineKeyboardButton("👥 Users", callback_data="users")]
+        [InlineKeyboardButton("👥 Users", callback_data="users")]
     ])
 
 user_mode = {}
@@ -55,7 +52,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     save_user(user.id)
 
-    # 🔥 USER INVITE SYSTEM
+    # Invite system
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
@@ -63,16 +60,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     msg = await update.message.reply_text(
-        f"🔥 *LIMITED VIP ACCESS*\n\n"
-        f"👉 {link.invite_link}\n\n"
-        f"⏳ 60 sec only\n⚠️ Join fast!",
-        parse_mode="Markdown",
+        f"🔥 VIP ACCESS\n👉 {link.invite_link}\n⏳ 60 sec",
         reply_markup=join_btn()
     )
 
     asyncio.create_task(countdown(msg, link.invite_link))
 
-    # 🔥 ADMIN PANEL
+    # Admin panel
     if user.id == ADMIN_ID:
         await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
 
@@ -81,22 +75,21 @@ async def countdown(msg, link):
     for i in range(60, 0, -1):
         try:
             await msg.edit_text(
-                f"🔥 {link}\n⏳ {i}s",
+                f"👉 {link}\n⏳ {i}s",
                 reply_markup=join_btn()
             )
         except:
             pass
         await asyncio.sleep(1)
 
-    await msg.edit_text("❌ LINK EXPIRED\n👉 @Shoyabk96")
+    await msg.edit_text("❌ Link Expired")
 
-# ================= JOIN VERIFY =================
+# ================= JOIN CHECK =================
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     user_id = query.from_user.id
-
     member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
 
     if member.status in ["member", "administrator", "creator"]:
@@ -116,64 +109,66 @@ async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     mode = query.data
     user_mode[uid] = mode
 
-    await query.message.reply_text(f"👉 {mode.upper()} mode active")
+    if mode == "users":
+        await query.message.reply_text(f"👥 Total Users: {len(get_users())}")
+        return
 
-# ================= HANDLE =================
-async def handle(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await query.message.reply_text(f"👉 {mode.upper()} mode ON\nAb message/file bhejo")
+
+# ================= HANDLE ADMIN ACTION =================
+async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    save_user(uid)
 
     if uid != ADMIN_ID:
         return
 
     mode = user_mode.get(uid)
 
-    if mode == "broadcast":
-        msg = update.message.text
-        success, fail = 0, 0
+    if not mode:
+        return
 
-        for u in get_users():
-            try:
-                await context.bot.send_message(u, msg)
-                success += 1
-            except:
-                fail += 1
+    success, fail = 0, 0
 
-        await update.message.reply_text(f"📢 Sent:{success} ❌:{fail}", reply_markup=panel())
-        user_mode[uid] = None
+    for u in get_users():
+        try:
+            if mode == "broadcast" and update.message.text:
+                await context.bot.send_message(u, update.message.text)
 
-    elif mode == "photo" and update.message.photo:
-        file_id = update.message.photo[-1].file_id
-        for u in get_users():
-            await context.bot.send_photo(u, file_id)
-        await update.message.reply_text("📸 Done", reply_markup=panel())
-        user_mode[uid] = None
+            elif mode == "photo" and update.message.photo:
+                await context.bot.send_photo(u, update.message.photo[-1].file_id)
 
-    elif mode == "video" and update.message.video:
-        file_id = update.message.video.file_id
-        for u in get_users():
-            await context.bot.send_video(u, file_id)
-        await update.message.reply_text("🎬 Done", reply_markup=panel())
-        user_mode[uid] = None
+            elif mode == "video" and update.message.video:
+                await context.bot.send_video(u, update.message.video.file_id)
 
-    elif mode == "audio":
-        msg = update.message
-        for u in get_users():
-            if msg.audio:
-                await context.bot.send_audio(u, msg.audio.file_id)
-            elif msg.voice:
-                await context.bot.send_voice(u, msg.voice.file_id)
+            elif mode == "audio":
+                if update.message.audio:
+                    await context.bot.send_audio(u, update.message.audio.file_id)
+                elif update.message.voice:
+                    await context.bot.send_voice(u, update.message.voice.file_id)
 
-        await update.message.reply_text("🎧 Done", reply_markup=panel())
-        user_mode[uid] = None
+            success += 1
+
+        except:
+            fail += 1
+
+    await update.message.reply_text(
+        f"✅ Done\n📊 Sent: {success}\n❌ Failed: {fail}",
+        reply_markup=panel()
+    )
+
+    user_mode[uid] = None
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
+
+# 🔥 FIX: pattern based handlers
 app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
-app.add_handler(MessageHandler(filters.ALL, handle))
 
-print("🔥 FINAL PANEL BOT RUNNING")
+# 🔥 FIX: only admin messages handle
+app.add_handler(MessageHandler(filters.ALL, handle_admin))
+
+print("🔥 FINAL FIXED BOT RUNNING")
 app.run_polling()
