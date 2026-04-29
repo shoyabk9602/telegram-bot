@@ -68,24 +68,6 @@ def join_button():
         [InlineKeyboardButton("✅ I Joined", callback_data="check_join")]
     ])
 
-# ================= COUNTDOWN =================
-async def countdown(msg, link):
-    for i in range(60, 0, -1):
-        try:
-            await msg.edit_text(
-                f"🔥 *LIMITED ACCESS*\n\n👉 {link}\n\n⏳ {i} sec",
-                parse_mode="Markdown",
-                reply_markup=join_button()
-            )
-        except:
-            pass
-        await asyncio.sleep(1)
-
-    await msg.edit_text(
-        "❌ LINK EXPIRED\n👉 https://t.me/Shoyabk96",
-        parse_mode="Markdown"
-    )
-
 # ================= INVITE =================
 async def send_link(update, context):
     user_id = update.effective_user.id
@@ -110,9 +92,7 @@ async def send_link(update, context):
         reply_markup=join_button()
     )
 
-    asyncio.create_task(countdown(msg, invite_link))
-
-# ================= VERIFY =================
+# ================= BUTTON VERIFY =================
 async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
@@ -124,53 +104,81 @@ async def check_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
             joined_users.add(user_id)
             add_join()
 
-        await query.edit_message_text("🎉 Joined")
+        await query.edit_message_text("🎉 Joined Successfully")
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= AUDIO FIX =================
-async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id != ADMIN_ID:
+# ================= AUTO JOIN FIX (IMPORTANT) =================
+async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_member = update.chat_member
+
+    if not chat_member:
         return
 
-    if not update.message.reply_to_message:
-        await update.message.reply_text("❌ Reply to audio/voice")
+    if chat_member.chat.username != CHANNEL_ID.replace("@", ""):
+        return
+
+    user_id = chat_member.new_chat_member.user.id
+    status = chat_member.new_chat_member.status
+
+    if status in ["member", "administrator", "creator"]:
+        if user_id not in joined_users:
+            joined_users.add(user_id)
+            add_join()
+
+# ================= PHOTO =================
+async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
         return
 
     msg = update.message.reply_to_message
     caption = " ".join(context.args).replace("\\n", "\n")
 
-    success, fail = 0, 0
+    for u in get_users():
+        await context.bot.send_photo(u, msg.photo[-1].file_id, caption=caption)
+
+# ================= VIDEO =================
+async def video(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+
+    msg = update.message.reply_to_message
+    caption = " ".join(context.args).replace("\\n", "\n")
 
     for u in get_users():
-        try:
-            # 🔥 AUDIO FILE
-            if msg.audio:
-                await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+        await context.bot.send_video(u, msg.video.file_id, caption=caption)
 
-            # 🔥 VOICE NOTE
-            elif msg.voice:
-                await context.bot.send_voice(u, msg.voice.file_id)
+# ================= AUDIO (FIXED) =================
+async def audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
 
-            else:
-                await update.message.reply_text("❌ Not audio/voice")
-                return
+    msg = update.message.reply_to_message
+    caption = " ".join(context.args).replace("\\n", "\n")
 
-            success += 1
-        except:
-            fail += 1
+    for u in get_users():
+        if msg.audio:
+            await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+        elif msg.voice:
+            await context.bot.send_voice(u, msg.voice.file_id)
 
-    await update.message.reply_text(f"🎧 Sent: {success} | ❌ {fail}")
+# ================= STATS =================
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    l, j = get_stats()
+    await update.message.reply_text(f"📊 Links: {l}\n✅ Joins: {j}")
 
 # ================= RUN =================
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", send_link))
+app.add_handler(CommandHandler("photo", photo))
+app.add_handler(CommandHandler("video", video))
 app.add_handler(CommandHandler("audio", audio))
+app.add_handler(CommandHandler("stats", stats))
 
 app.add_handler(CallbackQueryHandler(check_join))
 app.add_handler(ChatMemberHandler(track_join, ChatMemberHandler.CHAT_MEMBER))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
 
-print("🔥 AUDIO FIX BOT RUNNING")
+print("🔥 ERROR FIXED BOT RUNNING")
 app.run_polling()
