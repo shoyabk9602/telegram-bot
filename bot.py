@@ -35,77 +35,16 @@ def panel():
         [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")],
         [InlineKeyboardButton("📸 Photo", callback_data="photo")],
         [InlineKeyboardButton("🎬 Video", callback_data="video")],
-        [InlineKeyboardButton("🎧 Audio", callback_data="audio")],
+        [InlineKeyboardButton("🎧 Audio/Voice", callback_data="audio")],
         [InlineKeyboardButton("👥 Users", callback_data="users")]
     ])
 
 user_mode = {}
 
-# ================= JOIN BUTTON =================
-def join_btn():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ I Joined", callback_data="join_check")]
-    ])
-
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    uid = user.id
-    username = f"@{user.username}" if user.username else "NoUsername"
-
-    save_user(uid)
-
-    # 🔥 Invite Link
-    link = await context.bot.create_chat_invite_link(
-        chat_id=CHANNEL_ID,
-        member_limit=1,
-        expire_date=datetime.utcnow() + timedelta(seconds=60)
-    )
-
-    # 🔥 ADMIN NOTIFICATION (FIXED)
-    await context.bot.send_message(
-        ADMIN_ID,
-        f"📢 NEW LINK GENERATED\n\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
-    )
-
-    msg = await update.message.reply_text(
-        f"🔥 *VIP ACCESS*\n\n👉 {link.invite_link}\n⏳ 60 sec",
-        parse_mode="Markdown",
-        reply_markup=join_btn()
-    )
-
-    asyncio.create_task(countdown(msg, link.invite_link))
-
-    # Admin panel
-    if uid == ADMIN_ID:
-        await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
-
-# ================= COUNTDOWN =================
-async def countdown(msg, link):
-    for i in range(60, 0, -1):
-        try:
-            await msg.edit_text(
-                f"👉 {link}\n⏳ {i}s",
-                reply_markup=join_btn()
-            )
-        except:
-            pass
-        await asyncio.sleep(1)
-
-    await msg.edit_text("❌ Link Expired")
-
-# ================= JOIN CHECK =================
-async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    user_id = query.from_user.id
-    member = await context.bot.get_chat_member(CHANNEL_ID, user_id)
-
-    if member.status in ["member", "administrator", "creator"]:
-        await query.edit_message_text("🎉 Joined Successfully")
-    else:
-        await query.answer("❌ Join first", show_alert=True)
+    save_user(update.effective_user.id)
+    await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
 
 # ================= PANEL CLICK =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -135,12 +74,7 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not mode:
         return
 
-    caption = ""
-    if update.message.caption:
-        caption = update.message.caption
-    elif update.message.text:
-        caption = update.message.text
-
+    caption = update.message.caption or update.message.text or ""
     caption = caption.replace("\\n", "\n")
 
     success, fail = 0, 0
@@ -165,21 +99,23 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
 
             elif mode == "audio":
-                if update.message.audio:
-                    await context.bot.send_audio(
-                        u,
-                        update.message.audio.file_id,
-                        caption=caption
-                    )
-                elif update.message.voice:
-                    await context.bot.send_voice(
-                        u,
-                        update.message.voice.file_id
+                msg = update.message
+
+                # 🔥 AUDIO
+                if msg.audio:
+                    await context.bot.send_audio(u, msg.audio.file_id, caption=caption)
+
+                # 🔥 VOICE FIX (IMPORTANT)
+                elif msg.voice:
+                    await context.bot.copy_message(
+                        chat_id=u,
+                        from_chat_id=update.effective_chat.id,
+                        message_id=msg.message_id
                     )
 
             success += 1
 
-        except:
+        except Exception as e:
             fail += 1
 
     await update.message.reply_text(
@@ -193,9 +129,8 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
 app.add_handler(MessageHandler(filters.ALL, handle_admin))
 
-print("🔥 FINAL PERFECT BOT RUNNING")
+print("🔥 VOICE FIX BOT RUNNING")
 app.run_polling()
