@@ -11,7 +11,7 @@ from telegram.ext import (
     filters
 )
 
-# ================= CONFIG =================
+# CONFIG
 BOT_TOKEN = "8675239901:AAHO4PJRuLMxZ_HgFzrFE3q5xP3ZMMxYBr4"
 SUPPORT_BOT_TOKEN = "8742370126:AAFZpYXPlsEASY4l6lABj6kgxluAqW_t5n4"
 SUPPORT_CHAT_ID = 8338253309
@@ -25,26 +25,15 @@ SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
 SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
-# ================= DATABASE =================
+# DATABASE
 conn = sqlite3.connect("bot.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS tickets (
-user_id INTEGER PRIMARY KEY,
-messages TEXT
-)
-""")
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS msgs (
-user_id INTEGER,
-msg_id INTEGER
-)
-""")
+cursor.execute("CREATE TABLE IF NOT EXISTS tickets (user_id INTEGER PRIMARY KEY, messages TEXT)")
+cursor.execute("CREATE TABLE IF NOT EXISTS msgs (user_id INTEGER, msg_id INTEGER)")
 conn.commit()
 
-# ================= DB =================
 def save_user(uid):
     cursor.execute("INSERT OR IGNORE INTO users VALUES (?)", (uid,))
     conn.commit()
@@ -53,7 +42,7 @@ def get_users():
     cursor.execute("SELECT user_id FROM users")
     return [x[0] for x in cursor.fetchall()]
 
-# ================= UI =================
+# UI
 def panel():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📢 Broadcast", callback_data="broadcast")],
@@ -68,7 +57,7 @@ def join_btn():
 
 admin_mode = {}
 
-# ================= START =================
+# START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
@@ -86,17 +75,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
-    # 🔥 SUPPORT BOT NOTIFY
     username = f"@{user.username}" if user.username else "No Username"
 
+    # SUPPORT BOT NOTIFY
     await SUPPORT_BOT.send_message(
         chat_id=SUPPORT_CHAT_ID,
-        text=(
-            f"📢 NEW LINK GENERATED\n\n"
-            f"👤 User: {username}\n"
-            f"🆔 ID: {uid}\n\n"
-            f"🔗 Link:\n{link.invite_link}"
-        )
+        text=f"📢 NEW LINK\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
     )
 
     msg = await update.message.reply_text(
@@ -110,7 +94,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     asyncio.create_task(countdown(msg, link.invite_link, name))
 
-# ================= COUNTDOWN =================
+# COUNTDOWN
 async def countdown(msg, link, name):
     for i in range(60, 0, -1):
         try:
@@ -126,12 +110,18 @@ async def countdown(msg, link, name):
             pass
         await asyncio.sleep(1)
 
+    # 🔥 FINAL EXPIRE MESSAGE
     await msg.edit_text(
         "If link is expired than please contact to our Helpline for VIP channel link 👍\n\n"
+        "किसी भी तरह की हेल्प चाहिए तो वो भी आपकी ये सही करवा देगा \n\n"
+        "बहुत अच्छा होगा अगर आप एक बार में ही अपनी परेशानी लिख दोगे क्योंकि बार बार मैसेज करने से बहुत अच्छा है कि एक बार में ही परेशानी बतादो\n\n"
+        "Warning ⚠️ : हम किसी से भी किसी भी चीज के लिए पैसे नहीं लेते ना किसी को पैसों में टीम देते है और ना ही किसी को ये बोलकर पैसे लेते है कि हम आपके पैसे बढ़ा कर देंगे \n\n"
+        "अगर आप किसी को पैसे देते हो और फिर हमको मैसेज करोगे तो हम उसमें कुछ नहीं कर पाएंगे तो आप सबसे नम्र निवेदन है कि किसी को भी पैसे ना दे \n\n"
+        "जिनको चैनल ज्वाइन करना है वो यहां मैसेज करे 👍\n\n"
         "Helpline Manager ✅\nhttps://t.me/helplineIKMXCRICKET"
     )
 
-# ================= JOIN =================
+# JOIN
 async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -144,7 +134,7 @@ async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= SUPPORT MERGE =================
+# SUPPORT MERGE
 async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
@@ -171,24 +161,22 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await SUPPORT_BOT.send_message(
         chat_id=SUPPORT_CHAT_ID,
-        text=f"📩 MERGED QUERY\n👤 {user.first_name}\n🆔 {uid}\n\n{new_msg}",
+        text=f"📩 QUERY\n👤 {user.first_name}\n🆔 {uid}\n\n{new_msg}",
         reply_markup=kb
     )
 
-# ================= SOLVE =================
+# SOLVE (DELETE FULL)
 async def solve_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     uid = int(query.data.split("_")[1])
-
-    # 🔥 पूरा delete
     cursor.execute("DELETE FROM tickets WHERE user_id=?", (uid,))
     conn.commit()
 
     await query.edit_message_text("✅ Query Solved & Cleared")
 
-# ================= PANEL =================
+# PANEL
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -203,9 +191,9 @@ async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     admin_mode[ADMIN_ID] = mode
-    await query.message.reply_text(f"{mode.upper()} MODE ON\nSend message now")
+    await query.message.reply_text(f"{mode.upper()} MODE ON")
 
-# ================= ADMIN ACTION =================
+# ADMIN ACTION
 async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
@@ -220,25 +208,20 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # DELETE
     if mode == "delete":
         data = cursor.execute("SELECT user_id, msg_id FROM msgs").fetchall()
-        success, fail = 0, 0
-
         for u, mid in data:
             try:
                 await context.bot.delete_message(chat_id=u, message_id=mid)
-                success += 1
             except:
-                fail += 1
+                pass
 
         cursor.execute("DELETE FROM msgs")
         conn.commit()
 
-        await msg.reply_text(f"🧹 Deleted: {success} ❌ {fail}", reply_markup=panel())
+        await msg.reply_text("🧹 All messages deleted", reply_markup=panel())
         admin_mode[ADMIN_ID] = None
         return
 
-    # BROADCAST
-    success, fail = 0, 0
-
+    # BROADCAST ALL MEDIA
     for u in users:
         try:
             sent = await context.bot.copy_message(
@@ -246,18 +229,15 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 from_chat_id=update.effective_chat.id,
                 message_id=msg.message_id
             )
-
             cursor.execute("INSERT INTO msgs VALUES (?,?)", (u, sent.message_id))
             conn.commit()
-
-            success += 1
         except:
-            fail += 1
+            pass
 
-    await msg.reply_text(f"✅ Sent: {success} ❌ {fail}", reply_markup=panel())
+    await msg.reply_text("✅ Broadcast Done", reply_markup=panel())
     admin_mode[ADMIN_ID] = None
 
-# ================= RUN =================
+# RUN
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
@@ -268,5 +248,5 @@ app.add_handler(CallbackQueryHandler(panel_click))
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
 app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
-print("🔥 FINAL BOT RUNNING")
+print("🔥 BOT RUNNING")
 app.run_polling()
