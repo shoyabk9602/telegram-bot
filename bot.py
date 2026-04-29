@@ -101,14 +101,12 @@ async def send_link(update, context):
 
     text = update.message.text.lower() if update.message.text else ""
 
-    # TEST MODE
     if text == "shoyabtest":
         link = await context.bot.create_chat_invite_link(
             chat_id=CHANNEL_ID,
             member_limit=1,
             expire_date=datetime.utcnow() + timedelta(seconds=60)
         )
-
         msg = await update.message.reply_text(f"🧪 TEST\n{link.invite_link}")
         asyncio.create_task(countdown(msg, link.invite_link))
         return
@@ -133,44 +131,31 @@ async def send_link(update, context):
 
     links, joins = get_stats()
 
-    # 🔔 ADMIN NOTIFICATION (LINK INCLUDED)
     await context.bot.send_message(
         ADMIN_ID,
-        f"📢 NEW LINK\n\n👤 {username}\n🆔 {user_id}\n\n🔗 {invite_link}\n\n📊 {links} | {joins}"
+        f"📢 NEW LINK\n👤 {username}\n🆔 {user_id}\n\n🔗 {invite_link}\n📊 {links} | {joins}"
     )
 
     msg = await update.message.reply_text(
-        f"🔥 *LIMITED ACCESS INVITE*\n\n"
-        f"👉 {invite_link}\n\n"
-        f"⏳ 60 sec only\n"
-        f"⚠️ Join fast!",
+        f"🔥 *LIMITED ACCESS INVITE*\n\n👉 {invite_link}\n\n⏳ 60 sec only\n⚠️ Join fast!",
         parse_mode="Markdown",
         reply_markup=join_button()
     )
 
     asyncio.create_task(countdown(msg, invite_link))
 
-# ================= AUTO JOIN TRACK =================
+# ================= AUTO JOIN =================
 async def track_join(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_member = update.chat_member
-
-    if chat_member.chat.username != CHANNEL_ID.replace("@", ""):
+    if update.chat_member.chat.username != CHANNEL_ID.replace("@", ""):
         return
 
-    user_id = chat_member.new_chat_member.user.id
-    status = chat_member.new_chat_member.status
+    user_id = update.chat_member.new_chat_member.user.id
+    status = update.chat_member.new_chat_member.status
 
     if status in ["member", "administrator", "creator"]:
         if user_id not in joined_users:
             joined_users.add(user_id)
             add_join()
-
-            links, joins = get_stats()
-
-            await context.bot.send_message(
-                ADMIN_ID,
-                f"✅ User Joined\n🆔 {user_id}\n\n📊 {links} | {joins}"
-            )
 
 # ================= BROADCAST =================
 async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -184,27 +169,32 @@ async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await context.bot.send_message(u, msg)
             success += 1
-            await asyncio.sleep(0.05)
         except:
             fail += 1
 
-    await update.message.reply_text(f"📊 Sent: {success}\n❌ Failed: {fail}")
+    await update.message.reply_text(f"📊 {success} sent | {fail} failed")
 
-# ================= PHOTO =================
+# ================= PHOTO (FIXED) =================
 async def photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
 
     if not update.message.reply_to_message:
-        await update.message.reply_text("❌ Reply to photo")
+        await update.message.reply_text("❌ Photo pe reply karo")
+        return
+
+    if not update.message.reply_to_message.photo:
+        await update.message.reply_text("❌ Ye photo nahi hai")
         return
 
     file_id = update.message.reply_to_message.photo[-1].file_id
+    caption = " ".join(context.args) if context.args else ""
+
     success, fail = 0, 0
 
     for u in get_users():
         try:
-            await context.bot.send_photo(u, file_id)
+            await context.bot.send_photo(u, file_id, caption=caption)
             success += 1
         except:
             fail += 1
@@ -221,16 +211,10 @@ async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("👉 Open", url=link)]])
 
-    success, fail = 0, 0
-
     for u in get_users():
-        try:
-            await context.bot.send_message(u, msg, reply_markup=kb)
-            success += 1
-        except:
-            fail += 1
+        await context.bot.send_message(u, msg, reply_markup=kb)
 
-    await update.message.reply_text(f"🔘 {success} sent | {fail} failed")
+    await update.message.reply_text("🔘 Done")
 
 # ================= USERS =================
 async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -256,8 +240,7 @@ app.add_handler(CommandHandler("users", users))
 app.add_handler(CommandHandler("stats", stats))
 
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_link))
-app.add_handler(CallbackQueryHandler(track_join))
 app.add_handler(ChatMemberHandler(track_join, ChatMemberHandler.CHAT_MEMBER))
 
-print("🔥 FINAL AUTO BOT RUNNING")
+print("🔥 FINAL BOT RUNNING")
 app.run_polling()
