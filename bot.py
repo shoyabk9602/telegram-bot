@@ -33,8 +33,7 @@ cursor.execute("CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY)")
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS tickets (
 user_id INTEGER PRIMARY KEY,
-messages TEXT,
-status TEXT
+messages TEXT
 )
 """)
 cursor.execute("""
@@ -87,6 +86,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
+    # 🔥 SUPPORT BOT NOTIFY
+    username = f"@{user.username}" if user.username else "No Username"
+
+    await SUPPORT_BOT.send_message(
+        chat_id=SUPPORT_CHAT_ID,
+        text=(
+            f"📢 NEW LINK GENERATED\n\n"
+            f"👤 User: {username}\n"
+            f"🆔 ID: {uid}\n\n"
+            f"🔗 Link:\n{link.invite_link}"
+        )
+    )
+
     msg = await update.message.reply_text(
         f"<b>Hey 👋 {name}</b>\n\n"
         f"🔥 VIP Access Unlock!\n\n"
@@ -116,9 +128,6 @@ async def countdown(msg, link, name):
 
     await msg.edit_text(
         "If link is expired than please contact to our Helpline for VIP channel link 👍\n\n"
-        "किसी भी तरह की हेल्प चाहिए तो वो भी आपकी ये सही करवा देगा\n\n"
-        "बहुत अच्छा होगा अगर आप एक बार में ही अपनी परेशानी लिख दोगे\n\n"
-        "Warning ⚠️ : हम किसी से भी पैसे नहीं लेते\n\n"
         "Helpline Manager ✅\nhttps://t.me/helplineIKMXCRICKET"
     )
 
@@ -135,7 +144,7 @@ async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= SUPPORT =================
+# ================= SUPPORT MERGE =================
 async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     uid = user.id
@@ -145,16 +154,14 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     text = update.message.text or "Media"
 
-    row = cursor.execute(
-        "SELECT messages, status FROM tickets WHERE user_id=?", (uid,)
-    ).fetchone()
+    row = cursor.execute("SELECT messages FROM tickets WHERE user_id=?", (uid,)).fetchone()
 
-    if row and row[1] == "open":
+    if row:
         new_msg = row[0] + f"\n• {text}"
         cursor.execute("UPDATE tickets SET messages=? WHERE user_id=?", (new_msg, uid))
     else:
         new_msg = f"• {text}"
-        cursor.execute("REPLACE INTO tickets VALUES (?, ?, 'open')", (uid, new_msg))
+        cursor.execute("INSERT INTO tickets VALUES (?, ?)", (uid, new_msg))
 
     conn.commit()
 
@@ -174,10 +181,12 @@ async def solve_ticket(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
 
     uid = int(query.data.split("_")[1])
-    cursor.execute("UPDATE tickets SET status='closed' WHERE user_id=?", (uid,))
+
+    # 🔥 पूरा delete
+    cursor.execute("DELETE FROM tickets WHERE user_id=?", (uid,))
     conn.commit()
 
-    await query.edit_message_text("✅ Query Solved")
+    await query.edit_message_text("✅ Query Solved & Cleared")
 
 # ================= PANEL =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -208,10 +217,9 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
     msg = update.message
 
-    # 🔥 DELETE REAL
+    # DELETE
     if mode == "delete":
         data = cursor.execute("SELECT user_id, msg_id FROM msgs").fetchall()
-
         success, fail = 0, 0
 
         for u, mid in data:
@@ -228,7 +236,7 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
         admin_mode[ADMIN_ID] = None
         return
 
-    # 🔥 BROADCAST (ALL MEDIA)
+    # BROADCAST
     success, fail = 0, 0
 
     for u in users:
