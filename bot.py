@@ -1,8 +1,7 @@
 from datetime import datetime, timedelta
 import asyncio
 import sqlite3
-import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, InputMediaPhoto, InputMediaVideo, Bot
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -18,6 +17,9 @@ SUPPORT_CHAT_ID = 7206670618
 
 ADMIN_ID = 7206670618
 CHANNEL_ID = "@ikminvite"
+
+# ================= SUPPORT BOT =================
+SUPPORT_BOT = Bot(token=SUPPORT_BOT_TOKEN)
 
 # ================= DATABASE =================
 conn = sqlite3.connect("bot.db", check_same_thread=False)
@@ -154,7 +156,7 @@ async def join_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await query.answer("❌ Join first", show_alert=True)
 
-# ================= SUPPORT BOT =================
+# ================= SUPPORT =================
 async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
@@ -170,11 +172,10 @@ async def support_forward(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"{text}"
     )
 
-    url = f"https://api.telegram.org/bot{SUPPORT_BOT_TOKEN}/sendMessage"
-    requests.post(url, json={
-        "chat_id": SUPPORT_CHAT_ID,
-        "text": msg
-    })
+    await SUPPORT_BOT.send_message(
+        chat_id=SUPPORT_CHAT_ID,
+        text=msg
+    )
 
 # ================= PANEL =================
 async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,14 +283,14 @@ app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 
-# 🔥 FIXED BUTTONS
+# BUTTON FIX
 app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
 
-# 🔥 SUPPORT
+# SUPPORT
 app.add_handler(MessageHandler(filters.ALL & ~filters.User(ADMIN_ID), support_forward))
 
-# 🔥 ADMIN
+# ADMIN
 app.add_handler(MessageHandler(filters.ALL & filters.User(ADMIN_ID), admin_action))
 
 print("🔥 FINAL BOT RUNNING")
