@@ -50,24 +50,34 @@ def join_btn():
 # ================= START =================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    save_user(user.id)
+    uid = user.id
+    username = f"@{user.username}" if user.username else "NoUsername"
 
-    # Invite system
+    save_user(uid)
+
+    # 🔥 Invite Link
     link = await context.bot.create_chat_invite_link(
         chat_id=CHANNEL_ID,
         member_limit=1,
         expire_date=datetime.utcnow() + timedelta(seconds=60)
     )
 
+    # 🔥 ADMIN NOTIFICATION (FIXED)
+    await context.bot.send_message(
+        ADMIN_ID,
+        f"📢 NEW LINK GENERATED\n\n👤 {username}\n🆔 {uid}\n\n🔗 {link.invite_link}"
+    )
+
     msg = await update.message.reply_text(
-        f"🔥 VIP ACCESS\n👉 {link.invite_link}\n⏳ 60 sec",
+        f"🔥 *VIP ACCESS*\n\n👉 {link.invite_link}\n⏳ 60 sec",
+        parse_mode="Markdown",
         reply_markup=join_btn()
     )
 
     asyncio.create_task(countdown(msg, link.invite_link))
 
     # Admin panel
-    if user.id == ADMIN_ID:
+    if uid == ADMIN_ID:
         await update.message.reply_text("🎛️ Control Panel", reply_markup=panel())
 
 # ================= COUNTDOWN =================
@@ -115,36 +125,57 @@ async def panel_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.message.reply_text(f"👉 {mode.upper()} mode ON\nAb message/file bhejo")
 
-# ================= HANDLE ADMIN ACTION =================
+# ================= HANDLE ADMIN =================
 async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-
     if uid != ADMIN_ID:
         return
 
     mode = user_mode.get(uid)
-
     if not mode:
         return
+
+    caption = ""
+    if update.message.caption:
+        caption = update.message.caption
+    elif update.message.text:
+        caption = update.message.text
+
+    caption = caption.replace("\\n", "\n")
 
     success, fail = 0, 0
 
     for u in get_users():
         try:
             if mode == "broadcast" and update.message.text:
-                await context.bot.send_message(u, update.message.text)
+                await context.bot.send_message(u, caption)
 
             elif mode == "photo" and update.message.photo:
-                await context.bot.send_photo(u, update.message.photo[-1].file_id)
+                await context.bot.send_photo(
+                    u,
+                    update.message.photo[-1].file_id,
+                    caption=caption
+                )
 
             elif mode == "video" and update.message.video:
-                await context.bot.send_video(u, update.message.video.file_id)
+                await context.bot.send_video(
+                    u,
+                    update.message.video.file_id,
+                    caption=caption
+                )
 
             elif mode == "audio":
                 if update.message.audio:
-                    await context.bot.send_audio(u, update.message.audio.file_id)
+                    await context.bot.send_audio(
+                        u,
+                        update.message.audio.file_id,
+                        caption=caption
+                    )
                 elif update.message.voice:
-                    await context.bot.send_voice(u, update.message.voice.file_id)
+                    await context.bot.send_voice(
+                        u,
+                        update.message.voice.file_id
+                    )
 
             success += 1
 
@@ -162,13 +193,9 @@ async def handle_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
-
-# 🔥 FIX: pattern based handlers
 app.add_handler(CallbackQueryHandler(join_check, pattern="join_check"))
 app.add_handler(CallbackQueryHandler(panel_click))
-
-# 🔥 FIX: only admin messages handle
 app.add_handler(MessageHandler(filters.ALL, handle_admin))
 
-print("🔥 FINAL FIXED BOT RUNNING")
+print("🔥 FINAL PERFECT BOT RUNNING")
 app.run_polling()
